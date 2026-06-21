@@ -17,10 +17,11 @@ import math
 
 import gpu
 import numpy as np
-from gpu.types import GPUOffScreen, GPUFrameBuffer, GPUVertFormat, GPUVertBuf, GPUBatch
+from gpu.types import (GPUOffScreen, GPUFrameBuffer, GPUVertFormat, GPUVertBuf, GPUBatch,
+                       GPUUniformBuf, Buffer)
 from gpu_extras.batch import batch_for_shader
 
-from . import shader_build
+from . import shader_build, std140
 
 _FS_TRI = {"pos": [(-1.0, -1.0), (3.0, -1.0), (-1.0, 3.0)]}
 _BLIT_FRAG = ("#define nmTex(s, uv) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))),"
@@ -260,8 +261,18 @@ class GpuBackend:
             pass
 
     def _bind_inputs(self, shader, desc, rev, merged, inputs, graph):
-        for ctype, name in desc.get("pushConstants", []):
-            self._set_uniform(shader, ctype, name, merged.get(rev.get(name, name)))
+        fields = desc.get("pushConstants", [])
+        if desc.get("ubo"):
+            # Over-128B block -> std140 UBO instead of push constants. Pack every field from
+            # the merged engine+pass uniforms and bind one buffer. Hold a ref on self so the
+            # GPUUniformBuf stays alive through the draw that follows this call.
+            values = {name: merged.get(rev.get(name, name)) for _, name in fields}
+            packed = std140.pack(fields, values)
+            self._live_ubo = GPUUniformBuf(Buffer('FLOAT', len(packed), packed))
+            shader.uniform_block(std140.INSTANCE, self._live_ubo)
+        else:
+            for ctype, name in fields:
+                self._set_uniform(shader, ctype, name, merged.get(rev.get(name, name)))
         for slot, stype, name in desc.get("samplers", []):
             tid = inputs.get(rev.get(name, name))
             if tid is not None:

@@ -29,9 +29,10 @@ def run():
             continue
         desc = json.load(open(ci))
         frag = open(ci[:-len(".createinfo.json")] + ".frag").read()
-        # skip the staged classes (UBO overflow, MRT, no-out, varyings) — not P1.
+        # skip the classes that need the vertex+fragment path / MRT / no-out (this harness
+        # uses the fragment-only build_shader). UBO is now supported -> no longer skipped.
         notes = " ".join(desc.get("notes", []))
-        if desc.get("ubo") or len(desc.get("fragmentOut", [])) != 1 or "VARYING" in notes or "NO_OUT" in notes:
+        if desc.get("vertex") or len(desc.get("fragmentOut", [])) != 1 or "VARYING" in notes or "NO_OUT" in notes:
             skip.append(rel)
             continue
         try:

@@ -63,6 +63,36 @@ Must use `gpu.shader.create_from_info(GPUShaderCreateInfo)`. Inside the GLSL sou
 | fullscreen draw | `batch_for_shader(sh,'TRIS',{"pos":[(-1,-1),(3,-1),(-1,3)]}); batch.draw(sh)` |
 | offscreen | `with off.bind(): fb = gpu.state.active_framebuffer_get(); fb.clear(...)` |
 
+## 5b. Push constants cap at 128 bytes → std140 UBO (backend/std140.py)
+
+Metal push constants are limited to **128 bytes**; `create_from_info` errors *"Push constants
+have a minimum supported size of 128 bytes, however the constants added so far already reach
+NNN bytes. Consider using UBO."* once an effect's uniforms exceed it (~10 effects, e.g. the
+big classicNoisedeck generators `noise`/`fractal`/`shapes3d` at 130–190 B). Those descriptors
+are flagged `"ubo": true`; the backend compiles them with a **std140 uniform block** instead:
+
+- `info.typedef_source("struct NmUniforms { ... };")` + `info.uniform_buf(0,"NmUniforms","nm_ub")`;
+  bind a `GPUUniformBuf(Buffer('FLOAT', n, packed))` via `shader.uniform_block("nm_ub", ubo)`.
+- **Anonymous blocks are NOT supported** (empty instance name → malformed MSL); the block needs
+  a named instance, so members are referenced `nm_ub.<field>`. The shader body uses *bare* names,
+  so we **scope-aware-rewrite** bare uniform refs → `nm_ub.<field>`, leaving declarations and
+  shadowing locals/params alone (a `#define` can't — it rewrites the param decl too; e.g. noise's
+  `multires(int octaves,…)` shadows the `octaves` uniform).
+- **std140-on-Metal gotcha (load-bearing): a `vec3` occupies 16 bytes, not 12.** Blender maps
+  GLSL `vec3`→Metal `float3` (size 16), so a scalar *following* a vec3 lands at +16. Textbook
+  std140 (vec3 size 12) silently shifts every field after the first vec3→scalar boundary — it
+  renders *almost* right (the palette/hue tail drifts) so it's easy to miss. `spike_ubo4.py`
+  pins it with a known-answer over the real 24-field `noise` struct; `_ALIGN`/`_SIZE` use 16.
+- Keep the value packing as the single source of truth (`std140.pack`) shared with the struct
+  generator (`std140.struct_source`) so layout can't drift between the two sides.
+
+Unrelated but surfaced together: the classicNoisedeck shaders shadow GLSL builtins with locals
+(`float max = max(r, max(g, b));` in the inlined rgb→hsl helper). Blender MSL rejects calling a
+builtin once a same-named local is in scope ("called object type 'float' is not a function");
+ANGLE allows it. `std140.rename_shadow_builtins` renames the local scope-aware (keeping the
+builtin in the local's own initializer). This unblocked the whole cnd namespace (caustic /
+moodscape / noise / shapes now byte-identical).
+
 ## 6. Parity expectation
 
 Candidate (Blender GLSL→**MSL**) vs golden (reference WebGL2 → ANGLE→**Metal**): both land on
