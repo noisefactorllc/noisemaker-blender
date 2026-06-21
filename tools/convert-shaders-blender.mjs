@@ -342,6 +342,18 @@ function transpileVertFrag (vertSrc, fragSrc) {
   return { vert, frag, descriptor, notes }
 }
 
+// Per-program host adaptations for Blender-gpu-codegen quirks the generic transform can't catch.
+// Keyed "ns/name/program". Applied to the cleaned .frag after transpile(). Documented, narrow.
+const PROGRAM_OVERRIDES = {
+  // Premultiplied-alpha composite divides by outAlpha, which approaches zero because the additive
+  // trail has HDR alpha (>1) -> (1-trail.a) hugely negative. Blender's MSL codegen amplifies
+  // float ULP near that singularity into +/-65504 explosions (the reference/ANGLE stays bounded,
+  // r,g in [0,1]); the result is mathematically in [0,1], so clamp recovers the intended value.
+  'render/pointsBillboardRender/blend': (frag) =>
+    frag.replace('fragColor = vec4(outRGB, outAlpha);',
+      'fragColor = clamp(vec4(outRGB, outAlpha), 0.0, 1.0); // host: clamp premultiplied-divide singularity'),
+}
+
 function* enumeratePrograms (filter) {
   for (const ns of NAMESPACES) {
     const nsDir = join(EFFECTS_DIR, ns)
@@ -384,6 +396,8 @@ function main () {
     } catch (err) {
       flagged++; flags.push(`${ns}/${name}/${program}: THREW ${err?.message || err}`); continue
     }
+    const override = PROGRAM_OVERRIDES[`${ns}/${name}/${program}`]
+    if (override) res.frag = override(res.frag)
     if (res.notes.length) { flagged++; flags.push(`${ns}/${name}/${program}: ${res.notes.join('; ')}`) }
     if (!dryRun) {
       const outDir = join(OUT_DIR, ns, name)

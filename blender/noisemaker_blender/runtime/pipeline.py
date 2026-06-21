@@ -97,11 +97,13 @@ def render(backend, graph, time=0.25, frames=1, timestep=0.0, samples=None):
                 for tid in p.get("outputs", {}).values():
                     backend.swap_after_write(tid)
         backend.frame_persist()
-        # Force GPU submission periodically so long unsynced ping-pong loops don't overflow
-        # Blender's batched command stream into NaN (see GpuBackend.sync). Every 30 frames
-        # balances stability against the ~1px-readback cost.
-        if timestep and (f % 30 == 29):
-            backend.sync()
+        # Force GPU submission periodically so long unsynced loops don't overflow Blender's
+        # batched command stream (-> NaN / saturation). Read back the RENDER SURFACE (not an
+        # arbitrary state surface): that forces the WHOLE frame's passes — including the
+        # post-process chain — to complete, which a 1px read of an off-path surface does not
+        # (the integration target's 32 passes/frame overflow otherwise). Every 30 frames.
+        if timestep and (f % 30 == 29) and not (samples is not None and f in samples):
+            backend.read_surface(out_name)
         if samples is not None and f in samples:
             sampled[f] = backend.read_surface(out_name)
     if samples is not None:
