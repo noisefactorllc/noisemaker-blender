@@ -41,8 +41,9 @@ and [`PORTING-GUIDE.md`](PORTING-GUIDE.md).
 | **Agent behaviors** (life/hydraulic/attractor/lenia/mnca) | ✅ **all structurally render**; life was 8×8-clamped to black → fixed (pooled-slot envelope + §10.7 swap); residual = chaotic/exp precision wall |
 | **loopBegin/loopEnd** feedback construct (zp_G3w) | ✅ renders (ssim 0.69) — fixed `vecN==vecN` ternary → `all(equal())` (Blender MSL rejects bvecN conditions) |
 | 20-program blaster corpus scorecard | 🔄 **19/19 renderable** (B5oBsA non-reference, skip); mean ssim **0.56** (was 0.48); 5≥0.9, 3 byte-identical |
-| P5 integration (bake-to-Image, node tree) | ⏳ |
-| P6 in-Blender DSL compiler; classicNoisedeck UBO; attractor/lenia/life | staged |
+| **In-Blender DSL compiler** (lexer→parser→validate→expand→graph, stdlib-only) | ✅ **byte-identical to the reference** (`compile_graph` == `tools/export-graph.mjs`); gates lex/parse/compile **20/20**, expand/graph **19/19**; addon needs no external engine to author or compile |
+| **P5 integration surface** (bake-to-Image operator + CUSTOM node tree + N-panels) | ✅ **gated byte-exact** (`parity/integration.sh`): DSL→operator→Image == reference golden (max-diff 0, ssim 1.0) |
+| P6 classicNoisedeck UBO; attractor/lenia/life chaotic-precision | staged |
 
 **Out of scope:** media plugin (MIDI/audio inputs).
 
@@ -62,6 +63,20 @@ NM_JOBS='[{"graph":"parity/out/noise.graph.json","out":"parity/out/noise.candida
 
 # 3. grade
 python parity/compare.py parity/out/noise.golden.png parity/out/noise.candidate.png --name noise
+```
+
+The **DSL compiler** is gated separately on plain `python3` (stdlib only), comparing the
+in-addon `compile_graph` against the reference graph byte-for-byte:
+
+```sh
+for g in lex parse compile expanded graph; do python parity/compiler/check_$g.py; done
+```
+
+The **integration surface** (DSL → bake operator → Image datablock) has its own one-command
+end-to-end gate (needs the `adjust` golden seeded in `parity/out/`):
+
+```sh
+bash parity/integration.sh    # registers the addon, bakes adjust.dsl, grades vs the golden
 ```
 
 ## Layout
