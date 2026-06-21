@@ -38,7 +38,7 @@ LOG="$(mktemp)"
 
 echo "== [1/2] in-Blender integration test (registration + node + bake == pipeline) =="
 "$BLENDER" --factory-startup --python "$HERE/blender/harness/test_integration.py" >"$LOG" 2>&1 || true
-grep -E "reg OK|node OK|img OK|dump OK|INVARIANT A|INTEGRATION" "$LOG" || true
+grep -E "reg OK|node OK|img OK|dump OK|sweep|errpath|INVARIANT A|INTEGRATION" "$LOG" || true
 if ! grep -q "INTEGRATION PASS" "$LOG"; then
   echo "FAIL: in-Blender integration test did not pass"
   echo "---- log tail ----"; tail -30 "$LOG"; exit 1

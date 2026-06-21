@@ -45,8 +45,24 @@ def image_to_topdown_uint8(img):
 def run():
     import noisemaker_blender
     from noisemaker_blender.compiler import compile_graph
-    from noisemaker_blender.runtime import graph_loader, pipeline
+    from noisemaker_blender.runtime import graph_loader, pipeline, pngio
     from noisemaker_blender.backend.gpu_backend import GpuBackend
+
+    shaders_root = os.path.join(ADDON, "shaders", "effects")
+
+    def bake_and_read(dsl_src, image_name, frames=1, timestep=0.0):
+        """Bake via the operator AND render the same graph directly; return (arr_op, arr_direct).
+        INVARIANT A compares them — byte-exact at any recipe since it's the same backend+graph."""
+        be = GpuBackend(shaders_root, SIZE)
+        arr_d = pipeline.render(be, graph_loader.Graph(compile_graph(dsl_src)),
+                                time=TIME, frames=frames, timestep=timestep)
+        be.free()
+        r = bpy.ops.noisemaker.bake('EXEC_DEFAULT', dsl=dsl_src, image_name=image_name,
+                                    size=SIZE, time=TIME, frames=frames, timestep=timestep)
+        im = bpy.data.images.get(image_name)
+        if r != {'FINISHED'} or im is None:
+            raise RuntimeError("operator returned %r / image=%r" % (r, im))
+        return image_to_topdown_uint8(im), arr_d
 
     fails = []
 
@@ -82,32 +98,22 @@ def run():
     # --- 3+4. bake via operator, compare to direct pipeline ---------------------------
     src = open(DSL_PATH).read()
 
-    # direct path (the gated, byte-exact reference path)
-    be = GpuBackend(os.path.join(ADDON, "shaders", "effects"), SIZE)
-    arr_direct = pipeline.render(be, graph_loader.Graph(compile_graph(src)),
-                                 time=TIME, frames=1)
-    be.free()
-
-    # operator path (what a user clicking "Bake" runs)
-    res = bpy.ops.noisemaker.bake('EXEC_DEFAULT', dsl=src, image_name="NM_e2e",
-                                  size=SIZE, time=TIME, frames=1)
-    if res != {'FINISHED'}:
-        fails.append("operator returned %r (expected {'FINISHED'})" % (res,))
+    # adjust: single-pass, the gated byte-exact reference program. Bake it via the operator
+    # and also render it directly (INVARIANT A), and dump the PNG so an out-of-process grader
+    # (Blender's standalone python, which has pillow) can close INVARIANT B vs the golden.
+    try:
+        arr_op, arr_direct = bake_and_read(src, "NM_e2e", frames=1)
+    except Exception as e:
+        fails.append("adjust bake: %r" % e)
+        arr_op = arr_direct = None
     img = bpy.data.images.get("NM_e2e")
-    if img is None:
+    if img is None or arr_op is None:
         fails.append("operator did not create the 'NM_e2e' Image datablock")
     else:
         print("  img OK    %r size=%s float=%s colorspace=%s"
               % (img.name, tuple(img.size), img.is_float, img.colorspace_settings.name))
-        arr_op = image_to_topdown_uint8(img)
-        # Dump the baked image so an out-of-process grader (Blender's standalone python,
-        # which has pillow) can close INVARIANT B against the golden — see run note below.
-        try:
-            from noisemaker_blender.runtime import pngio
-            pngio.write_png("/tmp/nm_bake_adjust.png", arr_op)
-            print("  dump OK   /tmp/nm_bake_adjust.png")
-        except Exception as e:
-            print("  dump FAIL %r" % e)
+        pngio.write_png("/tmp/nm_bake_adjust.png", arr_op)
+        print("  dump OK   /tmp/nm_bake_adjust.png")
         print("  diag      direct mean=%s px[0,0]=%s ctr=%s"
               % (arr_direct.reshape(-1, 4).mean(0).round(1).tolist(),
                  arr_direct[0, 0].tolist(),
@@ -139,6 +145,57 @@ def run():
                 print("  INVARIANT B skipped: golden shape %s != %s" % (g.shape, arr_op.shape))
         except ImportError:
             print("  INVARIANT B skipped: PIL not available (A already proves the wrapper)")
+
+    # --- 4b. breadth: the operator across program shapes -------------------------------
+    # adjust above is a trivial single-pass program. The operator's real risk surface is
+    # multi-pass / multi-write-surface / stateful (frames+timestep). INVARIANT A is byte-exact
+    # at any recipe (same backend+graph), so it's the definitive check that those paths are
+    # wired right. Reference parity then follows transitively: A (bake==pipeline) + the corpus
+    # scorecard (pipeline==goldens) + graph parity (compile_graph==export-graph).
+    CORPUS = os.path.join(REPO, "parity", "corpus")
+    sweep = [
+        # (name, frames, timestep, note)
+        ("bRUa1g", 1, 0.0,       "multi-pass static (perlin->tetraCosine->lighting)"),
+        ("kQ_2mw", 1, 0.0,       "12 passes, 3 write surfaces o0/o1/o2"),
+        ("MQ2ojg", 8, 0.0016667, "stateful reactionDiffusion (exercises frames+timestep)"),
+    ]
+    for name, fr, ts, note in sweep:
+        dpath = os.path.join(CORPUS, name + ".dsl")
+        if not os.path.exists(dpath):
+            fails.append("sweep %s: %s not found" % (name, dpath))
+            continue
+        try:
+            a_op, a_direct = bake_and_read(open(dpath).read(), "NM_sweep_" + name,
+                                           frames=fr, timestep=ts)
+            if a_op.shape != a_direct.shape:
+                fails.append("sweep %s: shape %s != %s" % (name, a_op.shape, a_direct.shape))
+                continue
+            d = int(np.abs(a_op.astype(int) - a_direct.astype(int)).max())
+            print("  sweep %-4s A(bake==pipeline) max-diff=%d  [%s]  %s"
+                  % ("OK" if d == 0 else "BAD", d, name, note))
+            if d != 0:
+                fails.append("sweep %s: bake != pipeline (max-diff=%d)" % (name, d))
+        except Exception as e:
+            fails.append("sweep %s: %r" % (name, e))
+
+    # --- 4c. error paths: bad input must fail gracefully (not crash, not claim success) -
+    # A user will hit these. The operator catches and reports; from bpy.ops a reported
+    # {'ERROR'} surfaces as RuntimeError — both that and a {'CANCELLED'} return are graceful;
+    # only {'FINISHED'} (claiming success on bad input) is a failure.
+    def expect_fail(label, **kw):
+        try:
+            r = bpy.ops.noisemaker.bake('EXEC_DEFAULT', **kw)
+            if r == {'FINISHED'}:
+                fails.append("error-path %s: expected failure, got FINISHED" % label)
+            else:
+                print("  errpath OK %-14s -> %r" % (label, r))
+        except RuntimeError as e:
+            print("  errpath OK %-14s -> reported: %s" % (label, str(e).splitlines()[-1][:54]))
+        except Exception as e:
+            fails.append("error-path %s: ungraceful %r" % (label, e))
+
+    expect_fail("invalid-dsl", dsl="@@@ this is not noisemaker @@@", image_name="NM_err")
+    expect_fail("no-source")  # no dsl/text/file, fresh scene has no source set
 
     # --- 5. unregister round-trips ----------------------------------------------------
     try:
