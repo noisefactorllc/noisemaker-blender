@@ -1,9 +1,14 @@
 """GpuBackend — noisemaker render-graph executor on Blender's `gpu` module (Metal).
 
-Implements reference/04 §10: double-buffered global_* surfaces, resolveDimension for
-downsampled state (zoom), three-tier ping-pong (the pipeline drives within-frame /
-per-iteration / end-of-frame swaps via swap_after_write + persist). All surfaces linear
-RGBA16F; readback flattens the 3-D Buffer, flips to top-down, quantizes round(v*255).
+Implements reference/04 §10 + reference/05 backend semantics:
+- double-buffered global_* surfaces, resolveDimension for downsampled state (zoom),
+  three-tier ping-pong (the pipeline drives within-frame / per-iteration / end-of-frame
+  swaps via swap_after_write + persist);
+- per-surface formats (rgba8/rgba16f/rgba32f — agent position needs 32f);
+- MRT (multi-output agent passes write xyz/vel/rgba together via a multi-attachment FBO);
+- points scatter (drawMode:'points' — attribute-less gl_VertexID draw, additive ONE,ONE
+  blend, NO per-pass clear: targets retain content, cleared once at creation per reference/05).
+Readback flattens the 3-D Buffer, flips to top-down, quantizes round(v*255).
 """
 import os
 import json
@@ -11,7 +16,7 @@ import math
 
 import gpu
 import numpy as np
-from gpu.types import GPUOffScreen
+from gpu.types import GPUOffScreen, GPUFrameBuffer, GPUVertFormat, GPUVertBuf, GPUBatch
 from gpu_extras.batch import batch_for_shader
 
 from . import shader_build
@@ -23,6 +28,9 @@ _BLIT_FRAG = ("#define nmTex(s, uv) (texelFetch((s), clamp(ivec2(floor((uv)*vec2
 _BLIT_DESC = {"pushConstants": [["VEC2", "resolution"]], "samplers": [[0, "FLOAT_2D", "src"]],
               "fragmentOut": [[0, "VEC4", "fragColor"]], "uniformAliases": {}}
 
+# graph texture format string -> GPUOffScreen format token.
+_FORMAT = {"rgba8": "RGBA8", "rgba16f": "RGBA16F", "rgba32f": "RGBA32F"}
+
 
 def _is_state_surface(name):
     # display surfaces are o0..o7; everything else (sims, particles) is persistent state.
@@ -30,11 +38,12 @@ def _is_state_surface(name):
 
 
 class _Surface:
-    __slots__ = ("read", "write")
+    __slots__ = ("read", "write", "fmt")
 
-    def __init__(self, read, write):
+    def __init__(self, read, write, fmt):
         self.read = read
         self.write = write
+        self.fmt = fmt
 
 
 class GpuBackend:
@@ -47,6 +56,8 @@ class GpuBackend:
         self.frame_write = {}
         self._shader_cache = {}
         self._batch_cache = {}
+        self._fb_cache = {}       # tuple(id(off)..) -> GPUFrameBuffer (MRT)
+        self._vbuf_cache = {}     # count -> GPUVertBuf (attribute-less points draw)
 
     # ---- dimension resolution (reference/04 §resolveDimension) -------------
     def resolve_dim(self, spec, uniforms):
@@ -77,6 +88,15 @@ class GpuBackend:
                 return max(1, int(math.floor(s * spec["scale"])))
         return s
 
+    def _fmt(self, spec):
+        return _FORMAT.get(str(spec.get("format", "rgba16f")).lower(), "RGBA16F")
+
+    def _new_off(self, w, h, fmt):
+        off = GPUOffScreen(w, h, format=fmt)
+        with off.bind():                      # reference/05: FBOs cleared once to (0,0,0,0) at creation
+            gpu.state.active_framebuffer_get().clear(color=(0.0, 0.0, 0.0, 0.0))
+        return off
+
     # ---- surface/pool setup ----------------------------------------------
     def setup(self, graph, uniforms):
         texspecs = dict(graph.textures)
@@ -86,15 +106,15 @@ class GpuBackend:
         for tid, spec in texspecs.items():
             w = self.resolve_dim(spec.get("width", "screen"), uniforms)
             h = self.resolve_dim(spec.get("height", "screen"), uniforms)
+            fmt = self._fmt(spec)
             if tid.startswith("global_"):
                 name = tid[len("global_"):]
                 if name not in self.surfaces:
-                    self.surfaces[name] = _Surface(GPUOffScreen(w, h, format='RGBA16F'),
-                                                   GPUOffScreen(w, h, format='RGBA16F'))
+                    self.surfaces[name] = _Surface(self._new_off(w, h, fmt), self._new_off(w, h, fmt), fmt)
             else:
                 phys = graph.phys(tid)
                 if phys not in self.pool:
-                    self.pool[phys] = GPUOffScreen(w, h, format='RGBA16F')
+                    self.pool[phys] = self._new_off(w, h, fmt)
 
     def frame_begin(self):
         for name, s in self.surfaces.items():
@@ -133,23 +153,45 @@ class GpuBackend:
     def compile(self, namespace, func, prog, defines):
         defines = defines or {}
         if namespace is None and func == "blit":
-            frag, desc, rel = _BLIT_FRAG, _BLIT_DESC, "blit"
+            frag, desc, vert, rel = _BLIT_FRAG, _BLIT_DESC, None, "blit"
         else:
             base = os.path.join(self.shaders_root, namespace, func, prog)
             frag = open(base + ".frag").read()
             desc = json.load(open(base + ".createinfo.json"))
+            vert = open(base + ".vert").read() if desc.get("vertex") else None
             rel = namespace + "/" + func + "/" + prog
         key = (rel, tuple(sorted(defines.items())))
         if key not in self._shader_cache:
-            shader = shader_build.build_shader(frag, desc, defines)
+            if vert is not None:
+                shader = shader_build.build_shader_vf(vert, frag, desc, defines)
+            else:
+                shader = shader_build.build_shader(frag, desc, defines)
             rev = {v: k for k, v in desc.get("uniformAliases", {}).items()}
             self._shader_cache[key] = (shader, desc, rev)
         return self._shader_cache[key]
 
-    def _batch(self, shader):
+    def _fs_batch(self, shader):
         if shader not in self._batch_cache:
             self._batch_cache[shader] = batch_for_shader(shader, 'TRIS', _FS_TRI)
         return self._batch_cache[shader]
+
+    def _points_vbuf(self, count):
+        vbo = self._vbuf_cache.get(count)
+        if vbo is None:
+            fmt = GPUVertFormat()
+            fmt.attr_add(id="nm_dummy", comp_type='F32', len=1, fetch_mode='FLOAT')
+            vbo = GPUVertBuf(len=count, format=fmt)
+            vbo.attr_fill(id="nm_dummy", data=[0.0] * count)
+            self._vbuf_cache[count] = vbo
+        return vbo
+
+    def _mrt_fb(self, write_offs):
+        key = tuple(id(o) for o in write_offs)
+        fb = self._fb_cache.get(key)
+        if fb is None:
+            fb = GPUFrameBuffer(color_slots=tuple(o.texture_color for o in write_offs))
+            self._fb_cache[key] = fb
+        return fb
 
     @staticmethod
     def _set_uniform(shader, ctype, name, value):
@@ -169,33 +211,86 @@ class GpuBackend:
         except ValueError:
             pass
 
+    def _bind_inputs(self, shader, desc, rev, merged, inputs, graph):
+        for ctype, name in desc.get("pushConstants", []):
+            self._set_uniform(shader, ctype, name, merged.get(rev.get(name, name)))
+        for slot, stype, name in desc.get("samplers", []):
+            tid = inputs.get(rev.get(name, name))
+            if tid is not None:
+                shader.uniform_sampler(name, self._read(tid, graph).texture_color)
+
     # ---- pass execution ---------------------------------------------------
     def execute(self, p, graph, engine):
         pt = p.get("passType")
         if pt == "blit":
-            self._draw(self.compile(None, "blit", "blit", None),
-                       {"resolution": [float(self.size), float(self.size)]},
-                       {"src": p["inputs"]["src"]},
-                       list(p["outputs"].values())[0], graph)
+            compiled = self.compile(None, "blit", "blit", None)
+            merged = {"resolution": [float(self.size), float(self.size)]}
+            inputs = {"src": p["inputs"]["src"]}
         elif pt == "effect":
+            compiled = self.compile(p.get("namespace"), p["func"], p["progName"], p.get("defines"))
             merged = dict(engine)
             merged.update(p.get("uniforms", {}))
-            self._draw(self.compile(p.get("namespace"), p["func"], p["progName"], p.get("defines")),
-                       merged, p.get("inputs", {}), list(p["outputs"].values())[0], graph)
+            inputs = p.get("inputs", {})
+        else:
+            return
+        mode = p.get("drawMode")
+        if mode == "points":
+            self._render_points(compiled, merged, inputs, p, graph, per_particle=1)
+        elif mode == "billboards":
+            self._render_points(compiled, merged, inputs, p, graph, per_particle=6, tris=True)
+        else:
+            self._render(compiled, merged, inputs, p, graph)
 
-    def _draw(self, compiled, merged, inputs, out_tid, graph):
+    def _ordered_write_offs(self, desc, p, graph):
+        """Resolve output offscreens in fragmentOut-slot order (MRT-aware)."""
+        out_map = p.get("outputs", {})
+        fout = sorted(desc.get("fragmentOut", []), key=lambda x: x[0])
+        offs = []
+        for _, _, fname in fout:
+            tid = out_map.get(fname)
+            if tid is None and len(out_map) == 1:
+                tid = next(iter(out_map.values()))
+            if tid is not None:
+                offs.append(self._write(tid, graph))
+        if not offs:                                   # blit / unnamed single output
+            offs = [self._write(next(iter(out_map.values())), graph)]
+        return offs
+
+    @staticmethod
+    def _blend_mode(p):
+        b = p.get("blend")
+        return 'ADDITIVE_PREMULT' if (b and not isinstance(b, list)) else 'NONE'
+
+    def _render(self, compiled, merged, inputs, p, graph):
         shader, desc, rev = compiled
-        target = self._write(out_tid, graph)
-        with target.bind():
-            gpu.state.active_framebuffer_get().clear(color=(0.0, 0.0, 0.0, 0.0))
+        write_offs = self._ordered_write_offs(desc, p, graph)
+        w, h = write_offs[0].width, write_offs[0].height
+        mrt = len(write_offs) > 1
+        ctx = self._mrt_fb(write_offs).bind() if mrt else write_offs[0].bind()
+        with ctx:
+            gpu.state.viewport_set(0, 0, w, h)
+            gpu.state.blend_set(self._blend_mode(p))
             shader.bind()
-            for ctype, name in desc.get("pushConstants", []):
-                self._set_uniform(shader, ctype, name, merged.get(rev.get(name, name)))
-            for slot, stype, name in desc.get("samplers", []):
-                tid = inputs.get(rev.get(name, name))
-                if tid is not None:
-                    shader.uniform_sampler(name, self._read(tid, graph).texture_color)
-            self._batch(shader).draw(shader)
+            self._bind_inputs(shader, desc, rev, merged, inputs, graph)
+            self._fs_batch(shader).draw(shader)
+            gpu.state.blend_set('NONE')
+
+    def _render_points(self, compiled, merged, inputs, p, graph, per_particle=1, tris=False):
+        shader, desc, rev = compiled
+        target = self._ordered_write_offs(desc, p, graph)[0]
+        w, h = target.width, target.height
+        # count='input' -> one primitive per agent texel (xyzTex dims product).
+        src = inputs.get("xyzTex") or next(iter(inputs.values()))
+        src_off = self._read(src, graph)
+        count = src_off.width * src_off.height * per_particle
+        with target.bind():
+            gpu.state.viewport_set(0, 0, w, h)
+            gpu.state.blend_set('ADDITIVE_PREMULT' if p.get("blend") else 'NONE')
+            shader.bind()
+            self._bind_inputs(shader, desc, rev, merged, inputs, graph)
+            batch = GPUBatch(type='TRIS' if tris else 'POINTS', buf=self._points_vbuf(count))
+            batch.draw(shader)
+            gpu.state.blend_set('NONE')
 
     # ---- readback ---------------------------------------------------------
     def read_surface(self, name):

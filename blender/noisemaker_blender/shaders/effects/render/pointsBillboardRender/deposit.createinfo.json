@@ -1,0 +1,112 @@
+{
+  "pushConstants": [
+    [
+      "VEC2",
+      "resolution"
+    ],
+    [
+      "FLOAT",
+      "density"
+    ],
+    [
+      "FLOAT",
+      "pointSize"
+    ],
+    [
+      "FLOAT",
+      "sizeVariation"
+    ],
+    [
+      "FLOAT",
+      "rotationVar"
+    ],
+    [
+      "FLOAT",
+      "seed"
+    ],
+    [
+      "INT",
+      "viewMode"
+    ],
+    [
+      "FLOAT",
+      "rotateX"
+    ],
+    [
+      "FLOAT",
+      "rotateY"
+    ],
+    [
+      "FLOAT",
+      "rotateZ"
+    ],
+    [
+      "FLOAT",
+      "viewScale"
+    ],
+    [
+      "FLOAT",
+      "posX"
+    ],
+    [
+      "FLOAT",
+      "posY"
+    ],
+    [
+      "INT",
+      "shapeMode"
+    ],
+    [
+      "FLOAT",
+      "depositOpacity"
+    ]
+  ],
+  "samplers": [
+    [
+      0,
+      "FLOAT_2D",
+      "xyzTex"
+    ],
+    [
+      1,
+      "FLOAT_2D",
+      "rgbaTex"
+    ],
+    [
+      2,
+      "FLOAT_2D",
+      "spriteTex"
+    ]
+  ],
+  "fragmentOut": [
+    [
+      0,
+      "VEC4",
+      "fragColor"
+    ]
+  ],
+  "vertexIn": [
+    [
+      0,
+      "FLOAT",
+      "nm_dummy"
+    ]
+  ],
+  "varyings": [
+    [
+      "smooth",
+      "VEC4",
+      "vColor"
+    ],
+    [
+      "smooth",
+      "VEC2",
+      "vSpriteUV"
+    ]
+  ],
+  "vertex": true,
+  "uniformAliases": {},
+  "std140Bytes": 64,
+  "ubo": false,
+  "notes": []
+}

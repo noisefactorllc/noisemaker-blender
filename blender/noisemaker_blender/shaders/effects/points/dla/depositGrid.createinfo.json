@@ -1,0 +1,56 @@
+{
+  "pushConstants": [
+    [
+      "FLOAT",
+      "deposit"
+    ]
+  ],
+  "samplers": [
+    [
+      0,
+      "FLOAT_2D",
+      "xyzTex"
+    ],
+    [
+      1,
+      "FLOAT_2D",
+      "velTex"
+    ],
+    [
+      2,
+      "FLOAT_2D",
+      "rgbaTex"
+    ]
+  ],
+  "fragmentOut": [
+    [
+      0,
+      "VEC4",
+      "fragColor"
+    ]
+  ],
+  "vertexIn": [
+    [
+      0,
+      "FLOAT",
+      "nm_dummy"
+    ]
+  ],
+  "varyings": [
+    [
+      "smooth",
+      "FLOAT",
+      "v_weight"
+    ],
+    [
+      "smooth",
+      "VEC3",
+      "v_color"
+    ]
+  ],
+  "vertex": true,
+  "uniformAliases": {},
+  "std140Bytes": 16,
+  "ubo": false,
+  "notes": []
+}

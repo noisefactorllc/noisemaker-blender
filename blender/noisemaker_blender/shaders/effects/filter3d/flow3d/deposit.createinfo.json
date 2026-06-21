@@ -1,0 +1,50 @@
+{
+  "pushConstants": [
+    [
+      "FLOAT",
+      "density"
+    ],
+    [
+      "INT",
+      "volumeSize"
+    ]
+  ],
+  "samplers": [
+    [
+      0,
+      "FLOAT_2D",
+      "stateTex1"
+    ],
+    [
+      1,
+      "FLOAT_2D",
+      "stateTex2"
+    ]
+  ],
+  "fragmentOut": [
+    [
+      0,
+      "VEC4",
+      "fragColor"
+    ]
+  ],
+  "vertexIn": [
+    [
+      0,
+      "FLOAT",
+      "nm_dummy"
+    ]
+  ],
+  "varyings": [
+    [
+      "smooth",
+      "VEC4",
+      "vColor"
+    ]
+  ],
+  "vertex": true,
+  "uniformAliases": {},
+  "std140Bytes": 16,
+  "ubo": false,
+  "notes": []
+}

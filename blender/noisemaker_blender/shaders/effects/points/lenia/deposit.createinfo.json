@@ -1,0 +1,39 @@
+{
+  "pushConstants": [
+    [
+      "VEC2",
+      "resolution"
+    ],
+    [
+      "FLOAT",
+      "depositAmount"
+    ]
+  ],
+  "samplers": [
+    [
+      0,
+      "FLOAT_2D",
+      "xyzTex"
+    ]
+  ],
+  "fragmentOut": [
+    [
+      0,
+      "VEC4",
+      "fragColor"
+    ]
+  ],
+  "vertexIn": [
+    [
+      0,
+      "FLOAT",
+      "nm_dummy"
+    ]
+  ],
+  "varyings": [],
+  "vertex": true,
+  "uniformAliases": {},
+  "std140Bytes": 16,
+  "ubo": false,
+  "notes": []
+}

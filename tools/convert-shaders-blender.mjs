@@ -163,6 +163,112 @@ function transpile (src) {
   return { frag, descriptor, notes }
 }
 
+// GLSL type -> createInfo type for vertex_in attributes and stage-interface varyings.
+const IFACE_TYPE = {
+  float: 'FLOAT', vec2: 'VEC2', vec3: 'VEC3', vec4: 'VEC4',
+  int: 'INT', uint: 'UINT', ivec2: 'IVEC2', ivec3: 'IVEC3', ivec4: 'IVEC4',
+  mat3: 'MAT3', mat4: 'MAT4',
+}
+
+// strip #version/precision + rename MSL-reserved identifiers (shared by both transpile paths).
+function cleanAndRename (src) {
+  const lines = src.split('\n')
+  const kept = []
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim()
+    if (/^#version\b/.test(t)) continue
+    if (/^precision\s+(highp|mediump|lowp)\b/.test(t)) continue
+    if (/^#ifdef\s+GL_ES\b/.test(t)) {
+      let j = i + 1; const inner = []
+      while (j < lines.length && !/^\s*#endif\b/.test(lines[j])) { inner.push(lines[j]); j++ }
+      if (inner.every(l => l.trim() === '' || /^precision\b/.test(l.trim())) && j < lines.length) { i = j; continue }
+    }
+    kept.push(lines[i])
+  }
+  return renameReserved(kept.join('\n'))
+}
+
+// lift sampler + push-constant uniforms from a stage body, deduped across stages by name.
+function liftUniforms (body, samplerNames, pushNames, samplers, pushConstants) {
+  const samplerRe = /^[ \t]*uniform[ \t]+sampler2D[ \t]+([A-Za-z_]\w*)[ \t]*;[ \t]*(?:\/\/.*)?$/gm
+  let sm
+  while ((sm = samplerRe.exec(body)) !== null) {
+    if (!samplerNames.has(sm[1])) { samplerNames.add(sm[1]); samplers.push([samplers.length, 'FLOAT_2D', sm[1]]) }
+  }
+  body = body.replace(samplerRe, '')
+  const uniRe = new RegExp(`^[ \\t]*uniform[ \\t]+(${SCALAR_VEC_MAT})[ \\t]+([A-Za-z_]\\w*)[ \\t]*;[ \\t]*(?://.*)?$`, 'gm')
+  let um
+  while ((um = uniRe.exec(body)) !== null) {
+    if (!pushNames.has(um[2])) { pushNames.add(um[2]); pushConstants.push([TYPE_MAP[um[1]][0], um[2]]) }
+  }
+  return body.replace(uniRe, '')
+}
+
+// Vertex+fragment program (drawMode points/billboards/triangles deposit & 3D render). Same
+// declaration-lifting as transpile(), but across two stages, plus vertex_in attributes and a
+// vertex->fragment varying interface. Bodies (incl. gl_VertexID/gl_PointSize) kept verbatim.
+function transpileVertFrag (vertSrc, fragSrc) {
+  const notes = []
+  let vbody = cleanAndRename(vertSrc)
+  let fbody = cleanAndRename(fragSrc)
+
+  // vertex attributes (`in`) and varyings (`out`) — parse before generic uniform lift.
+  const inRe = /^[ \t]*in[ \t]+(\w+)[ \t]+([A-Za-z_]\w*)[ \t]*;[ \t]*(?:\/\/.*)?$/gm
+  const outRe = /^[ \t]*out[ \t]+(\w+)[ \t]+([A-Za-z_]\w*)[ \t]*;[ \t]*(?:\/\/.*)?$/gm
+  const vertexIn = []; let vi
+  while ((vi = inRe.exec(vbody)) !== null) { const t = IFACE_TYPE[vi[1]]; if (t) vertexIn.push([vertexIn.length, t, vi[2]]) }
+  vbody = vbody.replace(inRe, '')
+  const varyings = []; let vo
+  while ((vo = outRe.exec(vbody)) !== null) { const t = IFACE_TYPE[vo[1]]; if (t) varyings.push(['smooth', t, vo[2]]) }
+  vbody = vbody.replace(outRe, '')
+  fbody = fbody.replace(inRe, '')   // fragment `in <varying>;` — declared by the interface instead
+
+  const samplerNames = new Set(), pushNames = new Set()
+  const samplers = [], pushConstants = []
+  vbody = liftUniforms(vbody, samplerNames, pushNames, samplers, pushConstants)  // VS first: stable sampler slots
+  fbody = liftUniforms(fbody, samplerNames, pushNames, samplers, pushConstants)
+
+  // fragment outputs (vec4, optional explicit location).
+  const fragOutRe = /^[ \t]*(?:layout[ \t]*\([ \t]*location[ \t]*=[ \t]*(\d+)[ \t]*\)[ \t]*)?out[ \t]+vec4[ \t]+([A-Za-z_]\w*)[ \t]*;[ \t]*(?:\/\/.*)?$/gm
+  const fragmentOut = []; let om
+  while ((om = fragOutRe.exec(fbody)) !== null) fragmentOut.push([om[1] !== undefined ? Number(om[1]) : fragmentOut.length, 'VEC4', om[2]])
+  fbody = fbody.replace(fragOutRe, '')
+
+  // attribute-less draws (points/billboards) need a dummy attr so the vert buffer can size the draw.
+  if (vertexIn.length === 0) vertexIn.push([0, 'FLOAT', 'nm_dummy'])
+
+  // NEAREST+CLAMP rewrite, applied per stage only if it actually samples via 2-arg texture().
+  let preamble = ''
+  if (samplers.length) {
+    const before = vbody + ' ' + fbody
+    vbody = vbody.replace(/\btexture\s*\(/g, 'nmTex(')
+    fbody = fbody.replace(/\btexture\s*\(/g, 'nmTex(')
+    if ((vbody + ' ' + fbody) !== before) {
+      preamble = '#define nmTex(s, uv) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))),'
+        + ' ivec2(0), textureSize((s),0)-ivec2(1)), 0))\n'
+    }
+  }
+
+  const uniformAliases = {}
+  for (const [, name] of pushConstants) { const a = aliasOf(name); if (a) uniformAliases[a] = name }
+  for (const [, , name] of samplers) { const a = aliasOf(name); if (a) uniformAliases[a] = name }
+  if (Object.keys(uniformAliases).length) notes.push(`ALIASED ${Object.keys(uniformAliases).join(',')}`)
+
+  const bytes = std140Bytes(pushConstants)
+  const ubo = bytes > 128
+  if (ubo) notes.push(`PUSH_OVER_128 (${bytes}B) — UBO (staged)`)
+  if (fragmentOut.length > 1) notes.push(`MRT (${fragmentOut.length})`)
+  if (!/\bvoid[ \t]+main[ \t]*\(/.test(vbody)) notes.push('VERT_NO_MAIN — manual')
+
+  const vert = (preamble + vbody.replace(/\n{3,}/g, '\n\n').trim() + '\n')
+  const frag = (preamble + fbody.replace(/\n{3,}/g, '\n\n').trim() + '\n')
+  const descriptor = {
+    pushConstants, samplers, fragmentOut, vertexIn, varyings, vertex: true,
+    uniformAliases, std140Bytes: bytes, ubo, notes,
+  }
+  return { vert, frag, descriptor, notes }
+}
+
 function* enumeratePrograms (filter) {
   for (const ns of NAMESPACES) {
     const nsDir = join(EFFECTS_DIR, ns)
@@ -174,8 +280,15 @@ function* enumeratePrograms (filter) {
       const glslDir = join(dir, 'glsl')
       if (!existsSync(glslDir)) continue
       for (const g of readdirSync(glslDir).sort()) {
-        if (!g.endsWith('.glsl')) continue
-        yield { ns, name: entry, program: basename(g, '.glsl'), path: join(glslDir, g) }
+        if (g.endsWith('.vert')) {
+          const base = basename(g, '.vert')
+          const fragPath = join(glslDir, base + '.frag')
+          if (existsSync(fragPath)) {
+            yield { ns, name: entry, program: base, kind: 'vertfrag', vertPath: join(glslDir, g), fragPath }
+          }
+        } else if (g.endsWith('.glsl')) {
+          yield { ns, name: entry, program: basename(g, '.glsl'), kind: 'frag', path: join(glslDir, g) }
+        }
       }
     }
   }
@@ -187,10 +300,15 @@ function main () {
   const filter = argv.find(a => !a.startsWith('--')) || null
   let written = 0, flagged = 0, programs = 0
   const flags = []
-  for (const { ns, name, program, path } of enumeratePrograms(filter)) {
+  for (const prog of enumeratePrograms(filter)) {
+    const { ns, name, program, kind } = prog
     programs++
     let res
-    try { res = transpile(readFileSync(path, 'utf8')) } catch (err) {
+    try {
+      res = kind === 'vertfrag'
+        ? transpileVertFrag(readFileSync(prog.vertPath, 'utf8'), readFileSync(prog.fragPath, 'utf8'))
+        : transpile(readFileSync(prog.path, 'utf8'))
+    } catch (err) {
       flagged++; flags.push(`${ns}/${name}/${program}: THREW ${err?.message || err}`); continue
     }
     if (res.notes.length) { flagged++; flags.push(`${ns}/${name}/${program}: ${res.notes.join('; ')}`) }
@@ -198,6 +316,7 @@ function main () {
       const outDir = join(OUT_DIR, ns, name)
       mkdirSync(outDir, { recursive: true })
       writeFileSync(join(outDir, `${program}.frag`), res.frag)
+      if (kind === 'vertfrag') writeFileSync(join(outDir, `${program}.vert`), res.vert)
       writeFileSync(join(outDir, `${program}.createinfo.json`), JSON.stringify(res.descriptor, null, 2) + '\n')
     }
     written++

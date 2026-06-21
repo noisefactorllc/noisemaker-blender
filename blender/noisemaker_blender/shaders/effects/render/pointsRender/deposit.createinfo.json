@@ -1,0 +1,78 @@
+{
+  "pushConstants": [
+    [
+      "VEC2",
+      "resolution"
+    ],
+    [
+      "FLOAT",
+      "density"
+    ],
+    [
+      "INT",
+      "viewMode"
+    ],
+    [
+      "FLOAT",
+      "rotateX"
+    ],
+    [
+      "FLOAT",
+      "rotateY"
+    ],
+    [
+      "FLOAT",
+      "rotateZ"
+    ],
+    [
+      "FLOAT",
+      "viewScale"
+    ],
+    [
+      "FLOAT",
+      "posX"
+    ],
+    [
+      "FLOAT",
+      "posY"
+    ]
+  ],
+  "samplers": [
+    [
+      0,
+      "FLOAT_2D",
+      "xyzTex"
+    ],
+    [
+      1,
+      "FLOAT_2D",
+      "rgbaTex"
+    ]
+  ],
+  "fragmentOut": [
+    [
+      0,
+      "VEC4",
+      "fragColor"
+    ]
+  ],
+  "vertexIn": [
+    [
+      0,
+      "FLOAT",
+      "nm_dummy"
+    ]
+  ],
+  "varyings": [
+    [
+      "smooth",
+      "VEC4",
+      "vColor"
+    ]
+  ],
+  "vertex": true,
+  "uniformAliases": {},
+  "std140Bytes": 48,
+  "ubo": false,
+  "notes": []
+}

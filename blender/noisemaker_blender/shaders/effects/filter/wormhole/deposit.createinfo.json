@@ -1,0 +1,57 @@
+{
+  "pushConstants": [
+    [
+      "VEC2",
+      "resolution"
+    ],
+    [
+      "FLOAT",
+      "kink"
+    ],
+    [
+      "FLOAT",
+      "stride"
+    ],
+    [
+      "FLOAT",
+      "rotation"
+    ],
+    [
+      "INT",
+      "wrap"
+    ]
+  ],
+  "samplers": [
+    [
+      0,
+      "FLOAT_2D",
+      "inputTex"
+    ]
+  ],
+  "fragmentOut": [
+    [
+      0,
+      "VEC4",
+      "fragColor"
+    ]
+  ],
+  "vertexIn": [
+    [
+      0,
+      "FLOAT",
+      "nm_dummy"
+    ]
+  ],
+  "varyings": [
+    [
+      "smooth",
+      "VEC4",
+      "vColor"
+    ]
+  ],
+  "vertex": true,
+  "uniformAliases": {},
+  "std140Bytes": 32,
+  "ubo": false,
+  "notes": []
+}

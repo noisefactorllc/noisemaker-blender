@@ -1,0 +1,146 @@
+{
+  "pushConstants": [
+    [
+      "VEC2",
+      "resolution"
+    ],
+    [
+      "FLOAT",
+      "aspect"
+    ],
+    [
+      "FLOAT",
+      "meshScale"
+    ],
+    [
+      "FLOAT",
+      "meshOffsetX"
+    ],
+    [
+      "FLOAT",
+      "meshOffsetY"
+    ],
+    [
+      "FLOAT",
+      "meshOffsetZ"
+    ],
+    [
+      "FLOAT",
+      "rotateX"
+    ],
+    [
+      "FLOAT",
+      "rotateY"
+    ],
+    [
+      "FLOAT",
+      "rotateZ"
+    ],
+    [
+      "FLOAT",
+      "viewScale"
+    ],
+    [
+      "FLOAT",
+      "posX"
+    ],
+    [
+      "FLOAT",
+      "posY"
+    ],
+    [
+      "VEC3",
+      "lightDirection"
+    ],
+    [
+      "VEC3",
+      "diffuseColor"
+    ],
+    [
+      "FLOAT",
+      "diffuseIntensity"
+    ],
+    [
+      "VEC3",
+      "specularColor"
+    ],
+    [
+      "FLOAT",
+      "specularIntensity"
+    ],
+    [
+      "FLOAT",
+      "shininess"
+    ],
+    [
+      "VEC3",
+      "ambientColor"
+    ],
+    [
+      "FLOAT",
+      "rimIntensity"
+    ],
+    [
+      "FLOAT",
+      "rimPower"
+    ],
+    [
+      "VEC3",
+      "meshColor"
+    ],
+    [
+      "INT",
+      "wireframe"
+    ]
+  ],
+  "samplers": [
+    [
+      0,
+      "FLOAT_2D",
+      "meshPositions"
+    ],
+    [
+      1,
+      "FLOAT_2D",
+      "meshNormals"
+    ]
+  ],
+  "fragmentOut": [
+    [
+      0,
+      "VEC4",
+      "fragColor"
+    ]
+  ],
+  "vertexIn": [
+    [
+      0,
+      "FLOAT",
+      "nm_dummy"
+    ]
+  ],
+  "varyings": [
+    [
+      "smooth",
+      "VEC3",
+      "vNormal"
+    ],
+    [
+      "smooth",
+      "VEC2",
+      "vUV"
+    ],
+    [
+      "smooth",
+      "VEC3",
+      "vPosition"
+    ]
+  ],
+  "vertex": true,
+  "uniformAliases": {},
+  "std140Bytes": 176,
+  "ubo": true,
+  "notes": [
+    "PUSH_OVER_128 (176B) — UBO (staged)"
+  ]
+}
