@@ -33,13 +33,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // Reference engine lives in the sibling `noisemaker` repo (this repo was split
 // out of noisemaker/noisemaker-hlsl/). Override with NM_REFERENCE_ROOT.
-const REFERENCE_ROOT = process.env.NM_REFERENCE_ROOT
-  ? resolve(process.env.NM_REFERENCE_ROOT)
-  : resolve(__dirname, '..', '..', 'noisemaker')
+if (!process.env.NM_REFERENCE_ROOT) {
+  console.error('NM_REFERENCE_ROOT must point at the Noisemaker reference engine source root')
+  process.exit(1)
+}
+const REFERENCE_ROOT = resolve(process.env.NM_REFERENCE_ROOT)
 const EFFECTS_DIR = join(REFERENCE_ROOT, 'shaders', 'effects')
-const OUT_DIR = process.env.NM_OUT_DIR
-  ? resolve(process.env.NM_OUT_DIR)
-  : resolve(__dirname, '..', 'unity', 'com.noisemaker.hlsl', 'Effects')
+if (!process.env.NM_OUT_DIR) {
+  console.error('NM_OUT_DIR must point at the output Effects directory')
+  process.exit(1)
+}
+const OUT_DIR = resolve(process.env.NM_OUT_DIR)
 
 // Namespaces, mirrored from shaders/scripts/generate-shader-manifest.mjs.
 const NAMESPACES = [

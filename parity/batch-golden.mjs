@@ -21,8 +21,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // Reference (golden) engine lives in the sibling `noisemaker` repo. Override
 // with NM_REFERENCE_ROOT if it's elsewhere. (This repo was split out of
 // noisemaker/noisemaker-hlsl/, where the default was just `../..`.)
-const REFERENCE_ROOT = process.env.NM_REFERENCE_ROOT
-  ? resolve(process.env.NM_REFERENCE_ROOT) : resolve(__dirname, '..', '..', 'noisemaker')
+if (!process.env.NM_REFERENCE_ROOT) {
+  console.error('NM_REFERENCE_ROOT must point at the Noisemaker reference engine source root')
+  process.exit(1)
+}
+const REFERENCE_ROOT = resolve(process.env.NM_REFERENCE_ROOT)
 const HARNESS = join(REFERENCE_ROOT, 'vendor', 'shade-mcp', 'harness', 'index.js')
 const EXPORT_GRAPH = join(__dirname, '..', 'tools', 'export-graph.mjs')
 const STATUS_TIMEOUT = 300000

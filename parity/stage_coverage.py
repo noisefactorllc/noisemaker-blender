@@ -31,8 +31,10 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
-SIB = os.environ.get('NM_SIBLING_PORT') or os.path.join(REPO, '..', 'noisemaker-godot')
-REF = os.environ.get('NM_REFERENCE_ROOT') or os.path.join(REPO, '..', 'noisemaker')
+SIB = os.environ.get('NM_SIBLING_PORT')
+REF = os.environ.get('NM_REFERENCE_ROOT')
+if not SIB or not REF:
+    sys.exit('set NM_SIBLING_PORT and NM_REFERENCE_ROOT (no assumed sibling paths)')
 PROGRAMS = os.path.join(REPO, 'parity', 'programs')
 OUT = os.path.join(REPO, 'parity', 'out')
 FRAGS = os.path.join(REPO, 'td', 'noisemaker', 'shaders', 'effects')

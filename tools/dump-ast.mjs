@@ -10,9 +10,11 @@ import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const REF = process.env.NM_REFERENCE_ROOT
-  ? resolve(process.env.NM_REFERENCE_ROOT)
-  : resolve(__dirname, '..', '..', 'noisemaker')
+if (!process.env.NM_REFERENCE_ROOT) {
+  console.error('NM_REFERENCE_ROOT must point at the Noisemaker reference engine source root')
+  process.exit(1)
+}
+const REF = resolve(process.env.NM_REFERENCE_ROOT)
 
 const lang = await import(pathToFileURL(join(REF, 'shaders', 'src', 'lang', 'index.js')).href)
 const { lex, parse } = lang

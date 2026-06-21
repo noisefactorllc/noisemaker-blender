@@ -31,9 +31,11 @@ import { join, dirname, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const REFERENCE_ROOT = process.env.NM_REFERENCE_ROOT
-  ? resolve(process.env.NM_REFERENCE_ROOT)
-  : resolve(__dirname, '..', '..', 'noisemaker')
+if (!process.env.NM_REFERENCE_ROOT) {
+  console.error('NM_REFERENCE_ROOT must point at the Noisemaker reference engine source root')
+  process.exit(1)
+}
+const REFERENCE_ROOT = resolve(process.env.NM_REFERENCE_ROOT)
 const EFFECTS_DIR = join(REFERENCE_ROOT, 'shaders', 'effects')
 const OUT_DIR = process.env.NM_OUT_DIR
   ? resolve(process.env.NM_OUT_DIR)
