@@ -29,7 +29,7 @@ and [`PORTING-GUIDE.md`](PORTING-GUIDE.md).
 | Phase | State |
 |---|---|
 | P0 scaffold + GPU de-risk | ✅ (`blender/harness/spike_*.py`) |
-| P1 shader transpiler | ✅ 249/249 transpiled; **212 compile on Metal** (std140 UBO path + builtin-shadow rename; rest: staged MRT/varying + a few per-effect transpile bugs) |
+| P1 shader transpiler | ✅ 249/249 transpiled; **215 compile on Metal** (std140 UBO path + load-time MSL fixups: builtin-shadow rename, C++ alt-token rename, vecN== compound, mat2 vec-ctor; rest: staged MRT/varying + a few per-effect bugs) |
 | P2 backend + **Tier-1 parity gate** | ✅ **8/8 pass** (7 byte-identical, blur ±1) |
 | P4 single-pass sweep | ✅ **61/64 rendered pass** (NEAREST+CLAMP via texelFetch); 2 stateful→P3, 1 crt |
 | P3 executor: double-buffered surfaces, 3-tier ping-pong, iteration (`repeat`), `resolveDimension`, timed evolution (1800f @ 1/600) | ✅ |
@@ -44,7 +44,8 @@ and [`PORTING-GUIDE.md`](PORTING-GUIDE.md).
 | **In-Blender DSL compiler** (lexer→parser→validate→expand→graph, stdlib-only) | ✅ **byte-identical to the reference** (`compile_graph` == `tools/export-graph.mjs`); gates lex/parse/compile **20/20**, expand/graph **19/19**; addon needs no external engine to author or compile |
 | **P5 integration surface** (bake-to-Image operator + CUSTOM node tree + N-panels) | ✅ **gated byte-exact** (`parity/integration.sh`): DSL→operator→Image == reference golden (max-diff 0, ssim 1.0); breadth-checked across single/multi-pass, multi-surface, and stateful (frames+timestep) shapes, render-level compiler drop-in (`compile_graph`==`graph.json`), and graceful error paths |
 | **classicNoisedeck std140 UBO path** (>128B push-constant overflow) | ✅ implemented + de-risked (`spike_ubo*.py`); `cnd_noise`/`cnd_shapes` **byte-identical** via UBO; Metal vec3=16 layout fix |
-| P6 remaining cnd transpile bugs (colorLab vecBool, fractal mat2, shapeMixer reflect); attractor/lenia/life chaotic-precision | staged |
+| **classicNoisedeck namespace** | ✅ 19/20 compile (colorLab/bitEffects/fractal fixed; `cnd_noise/shapes/fractal/bitEffects/caustic/moodscape/noise3d` **byte-identical**); only `shapeMixer` left (scalar reflect/refract Metal-overload quirk) |
+| P6 shapeMixer scalar reflect/refract; attractor/lenia/life chaotic-precision | staged |
 
 **Out of scope:** media plugin (MIDI/audio inputs).
 

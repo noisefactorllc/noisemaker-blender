@@ -35,11 +35,17 @@ def _header(defines):
 
 
 def _body(src, is_ubo, descriptor):
-    """Load-time GLSL fix-ups: (1) rename locals that shadow GLSL builtins (all effects —
-    Blender MSL rejects calling a builtin once a same-named local is in scope); (2) for UBO
-    effects, qualify bare uniform references into the block (scope-aware). Both are no-ops when
-    nothing matches. See backend/std140.py."""
+    """Load-time GLSL->MSL-compat fix-ups (all no-ops when nothing matches):
+      - rename C++ alternative-token identifiers (`or`/`and`/...) — Metal keywords;
+      - rename locals shadowing GLSL builtins (`float max = max(...)`) — Blender MSL rejects
+        calling a builtin once a same-named local is in scope;
+      - vecN==vecN(...) -> all(equal(...)) in bool contexts (compound case the transpiler misses);
+      - for UBO effects, qualify bare uniform refs into the std140 block (scope-aware), last.
+    See backend/std140.py + docs/BLENDER-PLATFORM-NOTES.md."""
+    src = std140.rename_cpp_alt_tokens(src)
     src = std140.rename_shadow_builtins(src)
+    src = std140.fix_vec_bool_compare(src)
+    src = std140.fix_mat2_vector_ctor(src)
     if is_ubo:
         src = std140.rewrite_uniform_refs(src, descriptor.get("pushConstants", []))
     return src

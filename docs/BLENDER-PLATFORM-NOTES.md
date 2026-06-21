@@ -86,12 +86,27 @@ are flagged `"ubo": true`; the backend compiles them with a **std140 uniform blo
 - Keep the value packing as the single source of truth (`std140.pack`) shared with the struct
   generator (`std140.struct_source`) so layout can't drift between the two sides.
 
-Unrelated but surfaced together: the classicNoisedeck shaders shadow GLSL builtins with locals
-(`float max = max(r, max(g, b));` in the inlined rgb→hsl helper). Blender MSL rejects calling a
-builtin once a same-named local is in scope ("called object type 'float' is not a function");
-ANGLE allows it. `std140.rename_shadow_builtins` renames the local scope-aware (keeping the
-builtin in the local's own initializer). This unblocked the whole cnd namespace (caustic /
-moodscape / noise / shapes now byte-identical).
+**Load-time GLSL→MSL fix-ups** (`shader_build._body` → `std140.*`, applied to every effect; each
+a no-op when nothing matches, all verified non-regressing via compile_check + golden grading).
+These are MSL-strictness issues that ANGLE (the reference path) tolerates but Blender's MSL
+backend rejects — surfaced once the cnd namespace started compiling:
+
+- **builtin shadow** — `float max = max(r, max(g, b));` (inlined rgb→hsl helper). MSL rejects
+  calling a builtin once a same-named local is in scope. `rename_shadow_builtins` renames the
+  local scope-aware (keeping the builtin in the local's own initializer).
+- **C++ alternative tokens** — `int or(int,int)` / `and` / `xor`: these are *keywords* in Metal's
+  C++ (→ "expected member name or ';'"). `rename_cpp_alt_tokens` renames the identifier (skips
+  comments/members); none are GLSL keywords so it's safe.
+- **vecN==vecN(...) in bool contexts** — GLSL says it's a scalar bool, MSL makes a bvecN (rejected
+  in `||`/`&&`/`?:`). The transpiler's fixVecBoolTernary catches the single-compare-before-`?`
+  case; `fix_vec_bool_compare` also catches compound (`a==vec2(1) || a==vec2(3)`, colorLab).
+  `all(equal(...))`/`any(notEqual(...))` is exactly equivalent.
+- **mat2(vec2, float, float)** — Metal has no mixed vec2+scalar mat2 ctor; `fix_mat2_vector_ctor`
+  expands the leading vec2 to components (`mat2(z,-z.y,z.x)` → `mat2(z.x,z.y,-z.y,z.x)`, fractal).
+
+Result: classicNoisedeck 19/20 compile; cnd_noise/shapes/fractal/bitEffects/caustic/moodscape/
+noise3d byte-identical. Only `shapeMixer` remains (scalar `reflect`/`refract` is ambiguous on
+Metal's float/half overloads — and has no golden, so deferred rather than guess a substitution).
 
 ## 6. Parity expectation
 

@@ -71,6 +71,63 @@ _SHADOWABLE = frozenset(("max", "min", "mod", "mix", "clamp", "step", "smoothste
                          "fract", "abs", "sign", "floor", "ceil", "round"))
 
 
+# C++ alternative tokens (Metal compiles GLSL as C++): these are keywords there, so a GLSL
+# function/variable named `or`/`and`/... fails with "expected member name or ';'". None are GLSL
+# keywords or used builtins here, so renaming the identifier (not comments/members) is safe.
+_CPP_ALT_TOKENS = frozenset(("and", "or", "xor", "not", "bitand", "bitor", "compl",
+                             "and_eq", "or_eq", "xor_eq", "not_eq"))
+
+# Match `<lvalue> ==|!= vecN(...)` with a simple lvalue (ident + optional .swizzle) and a
+# non-nested constructor RHS — the vecN==vecN comparisons that Blender MSL turns into a bvecN
+# (rejected in bool contexts: `||`, `&&`, `?:`). GLSL says vecN==vecN is a SCALAR bool, so
+# `all(equal(...))` / `any(notEqual(...))` is exactly equivalent and compiles everywhere.
+_VEC_CMP = __import__("re").compile(r"([A-Za-z_][\w.]*)\s*(==|!=)\s*(i?vec[234]\s*\([^()]*\))")
+
+
+def fix_vec_bool_compare(src):
+    """vecN ==/!= vecN(...) -> all(equal(...)) / any(notEqual(...)). The transpiler's
+    fixVecBoolTernary handles the single-comparison-before-`?` case; this also catches compound
+    boolean contexts (`a == vec2(1) || a == vec2(3)`), e.g. colorLab. Semantically identical."""
+    def repl(m):
+        lhs, op, rhs = m.group(1), m.group(2), m.group(3)
+        return ("all(equal(%s, %s))" if op == "==" else "any(notEqual(%s, %s))") % (lhs, rhs)
+    return _VEC_CMP.sub(repl, src)
+
+
+# mat2 built from a leading vec2 + scalars, e.g. fractal's `mat2(z, -z.y, z.x)`. Metal rejects
+# the mixed vec2+float+float constructor; expand the vec2 to components. A 3-arg mat2 => its
+# first arg supplies 2 components (the vec2). 4-scalar `mat2(c,-s,s,c)` has 4 args -> no match.
+_MAT2_3ARG = __import__("re").compile(
+    r"\bmat2\s*\(\s*([A-Za-z_]\w*)\s*,([^,()]+),([^,()]+)\)")
+
+
+def fix_mat2_vector_ctor(src):
+    """mat2(vec2, x, y) -> mat2(vec2.x, vec2.y, x, y) (Metal has no mixed vec2+scalar mat2 ctor)."""
+    return _MAT2_3ARG.sub(
+        lambda m: "mat2(%s.x, %s.y,%s,%s)" % (m.group(1), m.group(1), m.group(2), m.group(3)), src)
+
+
+def rename_cpp_alt_tokens(src):
+    """Rename identifiers that are C++ alternative tokens (`or`/`and`/`xor`/...) to `nm_<name>`
+    — they're keywords in Metal's C++ compiler. Tokenized so comments and member accesses are
+    left alone; consistent global rename (these are user function names, e.g. bitEffects)."""
+    out = []
+    member_next = False
+    for m in _TOKEN.finditer(src):
+        t = m.group(0)
+        if t.startswith("//") or t.startswith("/*") or t.isspace():
+            out.append(t)
+            continue
+        if t == ".":
+            out.append(t); member_next = True; continue
+        if t[:1].isalpha() or t[:1] == "_":
+            out.append("nm_" + t if (not member_next and t in _CPP_ALT_TOKENS) else t)
+            member_next = False
+        else:
+            out.append(t); member_next = False
+    return "".join(out)
+
+
 def rename_shadow_builtins(src):
     """Rename local variables/params that shadow a GLSL builtin function (`_SHADOWABLE`) to
     `nm_<name>`, scope-aware: the rename covers the declaration and its in-scope uses, but NOT
