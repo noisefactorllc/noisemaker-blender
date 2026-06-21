@@ -62,21 +62,29 @@ def resolve_repeat_count(p, lookup):
     return 1
 
 
-def render(backend, graph, time=0.25, frames=1, samples=None, timed=False):
-    """Run `frames` frames. `timed` drives the stateful/feedback convention
-    (reference/04 / godot timed-sampling): advancing time ((f+1)/600)%1 at dt=1/600,
-    so sims evolve. If `samples` (set of frame indices) given, return {frame: array};
-    else return the final render-surface array."""
+def render(backend, graph, time=0.25, frames=1, timestep=0.0, samples=None):
+    """Run `frames` frames, matching the reference golden harness stepping EXACTLY
+    (parity/batch-golden.mjs): per frame `tt = (time + i*timestep) % 1`, and engine
+    deltaTime = 0 on frame 0 else (tt - tt_prev) — the `lastTime>0` guard, raw diff
+    (can go negative at the time wrap, which the speed-driven sims ignore).
+
+    - timestep=0  -> fixed-time deterministic render (deltaTime stays 0): single-pass
+      effects and N-frames-from-zero (the 8-frame points/agents convention).
+    - timestep>0  -> continuous-solver / agent evolution to steady state (navierStokes,
+      points sims): the babylon `_EVO` recipe is frames=1800, timestep=0.0016667 (30s @ 1/600).
+
+    If `samples` (set of frame indices) given, return {frame: array}; else the final
+    render-surface array."""
     defaults = collect_default_uniforms(graph)
     backend.setup(graph, defaults)
     out_name = graph.render_surface  # surface name, e.g. "o1"
     sampled = {}
+    prev_tt = None
     for f in range(frames):
-        if timed:
-            t = ((f + 1) / 600.0) % 1.0
-            engine = default_engine(backend.size, t, f, 1.0 / 600.0)
-        else:
-            engine = default_engine(backend.size, time, f)
+        tt = (time + f * timestep) % 1.0 if timestep else time
+        dt = 0.0 if (prev_tt is None) else (tt - prev_tt)
+        prev_tt = tt
+        engine = default_engine(backend.size, tt, f, dt)
         lookup = dict(engine)
         lookup.update(defaults)
         backend.frame_begin()
@@ -89,6 +97,11 @@ def render(backend, graph, time=0.25, frames=1, samples=None, timed=False):
                 for tid in p.get("outputs", {}).values():
                     backend.swap_after_write(tid)
         backend.frame_persist()
+        # Force GPU submission periodically so long unsynced ping-pong loops don't overflow
+        # Blender's batched command stream into NaN (see GpuBackend.sync). Every 30 frames
+        # balances stability against the ~1px-readback cost.
+        if timestep and (f % 30 == 29):
+            backend.sync()
         if samples is not None and f in samples:
             sampled[f] = backend.read_surface(out_name)
     if samples is not None:

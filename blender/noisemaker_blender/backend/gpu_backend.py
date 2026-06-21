@@ -292,6 +292,23 @@ class GpuBackend:
             batch.draw(shader)
             gpu.state.blend_set('NONE')
 
+    def sync(self):
+        """Force GPU command submission/completion. Blender batches draws within a single
+        Python call without yielding to its event loop; an unsynced ping-pong loop of
+        thousands of passes (navierStokes @ 1800 frames) overflows the command stream and
+        the float state decays to NaN. A 1-px readback flushes the queue (this is why the
+        sampling harness, which reads back periodically, stayed stable while a plain
+        final-only read NaN'd). Cheap relative to a frame."""
+        off = None
+        if self.frame_read:
+            off = next(iter(self.frame_read.values()))
+        elif self.pool:
+            off = next(iter(self.pool.values()))
+        if off is None:
+            return
+        with off.bind():
+            gpu.state.active_framebuffer_get().read_color(0, 0, 1, 1, 4, 0, 'FLOAT')
+
     # ---- readback ---------------------------------------------------------
     def read_surface(self, name):
         off = self.frame_read[name]
