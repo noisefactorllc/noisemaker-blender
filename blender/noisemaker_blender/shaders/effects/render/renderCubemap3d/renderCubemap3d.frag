@@ -19,7 +19,7 @@
 
 const float TAU = 6.283185307179586;
 const float PI = 3.141592653589793;
-const int MAX_STEPS = 256;
+#define MAX_STEPS 256
 const float MAX_DIST = 10.0;
 
 // Helper to convert 3D texel coords to 2D atlas texel coords

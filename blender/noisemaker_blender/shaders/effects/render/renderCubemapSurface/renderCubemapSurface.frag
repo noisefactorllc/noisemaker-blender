@@ -12,7 +12,7 @@
 
 // MRT outputs: color and geometry nm_buffer
 
-const int MAX_STEPS = 256;
+#define MAX_STEPS 256
 
 // Helper to convert 3D texel coords to 2D atlas texel coords
 ivec2 atlasTexel(ivec3 p, int volSize) {

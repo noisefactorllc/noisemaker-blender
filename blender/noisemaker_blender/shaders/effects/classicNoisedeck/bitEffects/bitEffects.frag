@@ -149,7 +149,7 @@ float value(vec2 st, float xFreq, float yFreq, float s) {
 }
 
 // bitwise operations
-const int BIT_COUNT = 8;
+#define BIT_COUNT 8
 const int mask = (1 << BIT_COUNT) - 1;
 
 int modi(int x, int y) {

@@ -60,7 +60,7 @@ vec2 setMag(vec2 v, float mag) {
 }
 
 // Spatial grid parameters - 16x16 grid cells
-const int GRID_SIZE = 16;
+#define GRID_SIZE 16
 
 ivec2 getGridCell(vec2 pos, vec2 res) {
     vec2 cellSize = res / float(GRID_SIZE);

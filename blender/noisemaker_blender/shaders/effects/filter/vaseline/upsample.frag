@@ -2,7 +2,7 @@
 // Vaseline - N-tap blur with edge-weighted blending
 // Uses golden angle spiral nm_kernel for smooth, non-blocky blur
 
-const int TAP_COUNT = 32;
+#define TAP_COUNT 32
 const float RADIUS = 48.0;
 const float GOLDEN_ANGLE = 2.39996323;
 const float BRIGHTNESS_ADJUST = 0.15;

@@ -17,7 +17,7 @@ in vec2 v_texCoord;
 
 const float PI = 3.14159265359;
 const float INV_UINT32_MAX = 1.0 / 4294967295.0;
-const int Z_LOOP = 2;
+#define Z_LOOP 2
 const float SHADE_GAIN = 4.4;
 
 float clamp01(float value) {

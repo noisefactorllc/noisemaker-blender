@@ -28,10 +28,10 @@ const int GLYPHS[80] = int[80](
     0x3E, 0x22, 0x22, 0x3E, 0x06, 0x06, 0x06, 0x00
 );
 
-const int GLYPH_W = 7;
-const int GLYPH_H = 8;
-const int BASE_SCALE = 3;
-const int BASE_ROW_GAP = 4;
+#define GLYPH_W 7
+#define GLYPH_H 8
+#define BASE_SCALE 3
+#define BASE_ROW_GAP 4
 
 uint hash_mix(uint v) {
     v = v ^ (v >> 16u);

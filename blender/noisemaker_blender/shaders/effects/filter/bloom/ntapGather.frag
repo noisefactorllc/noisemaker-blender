@@ -6,7 +6,7 @@
  */
 
 // Maximum number of taps supported
-const int MAX_TAPS = 64;
+#define MAX_TAPS 64
 
 // Golden angle for Poisson-like disk distribution
 const float GOLDEN_ANGLE = 2.39996323;

@@ -65,6 +65,77 @@ function renameReserved (src) {
   for (const w of MSL_RESERVED) out = out.replace(new RegExp(`\\b${w}\\b`, 'g'), `nm_${w}`)
   return out
 }
+
+// Blender's GLSL->MSL codegen treats a top-level `const int` as a non-static data member, so it
+// can't size an array — `const Foo X[COUNT]` fails with "invalid use of non-static data member".
+// Promote column-0 integer consts to #define (true compile-time literals). Function-local consts
+// (indented) are untouched, so this can't collide with locals of the same name.
+function constIntToDefine (src) {
+  return src.replace(/^const[ \t]+int[ \t]+([A-Za-z_]\w*)[ \t]*=[ \t]*(-?\d+)[ \t]*;[ \t]*(?:\/\/.*)?$/gm,
+    '#define $1 $2')
+}
+
+function splitTopLevel (s) {
+  const out = []; let depth = 0, cur = ''
+  for (const ch of s) {
+    if (ch === '(' || ch === '[') depth++
+    else if (ch === ')' || ch === ']') depth--
+    if (ch === ',' && depth === 0) { out.push(cur.trim()); cur = '' } else cur += ch
+  }
+  if (cur.trim()) out.push(cur.trim())
+  return out
+}
+
+// Blender's GLSL->MSL has NO struct constructor (`Foo(a,b)` -> "no matching constructor"), so a
+// const array of a POD-vec4 struct (palette/historicPalette tables: `const Foo T[N]=Foo[N](Foo(...),...)`)
+// can't compile. Flatten each such table into parallel `const vec4 T_field[N]=vec4[N](...)` arrays
+// (which DO compile) and rewrite `Foo e = T[expr]; e.field` -> `int e_idx=(expr); T_field[e_idx]`.
+function flattenStructArrays (body) {
+  const structRe = /\bstruct\s+(\w+)\s*\{([^}]*)\}\s*;/g
+  const pods = []; let sm
+  while ((sm = structRe.exec(body)) !== null) {
+    const members = []; let allVec4 = true; const memRe = /\b(\w+)\s+(\w+)\s*;/g; let mm
+    while ((mm = memRe.exec(sm[2])) !== null) { if (mm[1] !== 'vec4') { allVec4 = false; break } members.push(mm[2]) }
+    if (allVec4 && members.length) pods.push({ name: sm[1], members, def: sm[0] })
+  }
+  for (const st of pods) body = flattenOneStruct(body, st)
+  return body
+}
+
+function flattenOneStruct (body, st) {
+  const { name, members, def } = st
+  const head = new RegExp(`const\\s+${name}\\s+(\\w+)\\s*\\[\\s*(\\w+)\\s*\\]\\s*=\\s*${name}\\s*\\[`)
+  const dm = head.exec(body)
+  if (!dm) return body                                  // struct has no const-array table -> leave alone
+  const arrName = dm[1], cnt = dm[2]
+  let p = dm.index + dm[0].length
+  while (p < body.length && body[p] !== '(') p++
+  let depth = 0, end = -1
+  for (let i = p; i < body.length; i++) { if (body[i] === '(') depth++; else if (body[i] === ')') { depth--; if (!depth) { end = i; break } } }
+  if (end < 0) return body
+  const semi = body.indexOf(';', end)
+  const inner = body.slice(p + 1, end)
+  const entries = []; const eRe = new RegExp(`${name}\\s*\\(`, 'g'); let em
+  while ((em = eRe.exec(inner)) !== null) {
+    let o = em.index + em[0].length - 1, d = 0, e2 = -1
+    for (let i = o; i < inner.length; i++) { if (inner[i] === '(') d++; else if (inner[i] === ')') { d--; if (!d) { e2 = i; break } } }
+    entries.push(splitTopLevel(inner.slice(o + 1, e2)))
+  }
+  let arrays = ''
+  members.forEach((f, fi) => {
+    arrays += `const vec4 ${arrName}_${f}[${cnt}] = vec4[${cnt}](${entries.map(e => e[fi]).join(', ')});\n`
+  })
+  body = body.slice(0, dm.index) + arrays + body.slice(semi + 1)
+  body = body.replace(def, '')
+  const asg = new RegExp(`${name}\\s+(\\w+)\\s*=\\s*${arrName}\\s*\\[([^\\]]+)\\]\\s*;`, 'g')
+  const locals = []; let am
+  while ((am = asg.exec(body)) !== null) locals.push({ local: am[1], idx: am[2], full: am[0] })
+  for (const lo of locals) {
+    body = body.replace(lo.full, `int ${lo.local}_idx = (${lo.idx});`)
+    for (const f of members) body = body.replace(new RegExp(`\\b${lo.local}\\.${f}\\b`, 'g'), `${arrName}_${f}[${lo.local}_idx]`)
+  }
+  return body
+}
 const aliasOf = (name) => {
   const m = /^nm_(constant|kernel|buffer|sample|device|thread|threadgroup|fragment|vertex)$/.exec(name)
   return m ? m[1] : null
@@ -101,6 +172,8 @@ function transpile (src) {
 
   // 1b. rename MSL-reserved identifiers across the whole source (keeps lifted names consistent).
   body = renameReserved(body)
+  body = constIntToDefine(body)
+  body = flattenStructArrays(body)
 
   // flag uniform arrays (audio waveform/spectrum — out of scope) before generic uniform parse.
   const arrayRe = /^[ \t]*uniform[ \t]+\w+[ \t]+([A-Za-z_]\w*)[ \t]*\[/gm
@@ -185,7 +258,7 @@ function cleanAndRename (src) {
     }
     kept.push(lines[i])
   }
-  return renameReserved(kept.join('\n'))
+  return constIntToDefine(renameReserved(kept.join('\n')))
 }
 
 // lift sampler + push-constant uniforms from a stage body, deduped across stages by name.

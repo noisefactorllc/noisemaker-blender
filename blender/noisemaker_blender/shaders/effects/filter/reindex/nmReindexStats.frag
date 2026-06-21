@@ -3,7 +3,7 @@
 
 const float F32_MAX = 3.402823466e38;
 const float F32_MIN = -3.402823466e38;
-const int TILE_SIZE = 8;
+#define TILE_SIZE 8
 
 float clamp01(float value) {
     return clamp(value, 0.0, 1.0);

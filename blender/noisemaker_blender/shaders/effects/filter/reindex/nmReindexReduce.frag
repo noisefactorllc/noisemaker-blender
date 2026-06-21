@@ -3,8 +3,8 @@
 
 const float F32_MAX = 3.402823466e38;
 const float F32_MIN = -3.402823466e38;
-const int TILE_SIZE = 8;
-const int MAX_TILE_DIM = 512; // Supports resolutions up to 4096px.
+#define TILE_SIZE 8
+#define MAX_TILE_DIM 512
 
 void main() {
     // Single pixel output; ensure only the first nm_fragment runs the reduction.

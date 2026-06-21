@@ -46,7 +46,7 @@ vec3 typeColor(int typeId, int totalTypes) {
 
 // === SPATIAL GRID ===
 
-const int GRID_SIZE = 16;
+#define GRID_SIZE 16
 
 ivec2 getGridCell(vec2 pos) {
     vec2 cellSize = vec2(1.0) / float(GRID_SIZE);

@@ -177,7 +177,7 @@ float hash(vec2 p) {
 //  #####
 //  #####
 
-const int GLYPH_COUNT = 16;
+#define GLYPH_COUNT 16
 
 // Return 1.0 if pixel (x, y) is set in glyph g, else 0.0
 // x: 0-4 (left to right), y: 0-6 (top to bottom)

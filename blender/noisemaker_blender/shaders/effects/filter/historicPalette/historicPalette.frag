@@ -13,7 +13,7 @@ struct HistoricPalette {
     vec3 color5;  // lightest
 };
 
-const int PALETTE_COUNT = 21;
+#define PALETTE_COUNT 21
 const HistoricPalette PALETTES[PALETTE_COUNT] = HistoricPalette[PALETTE_COUNT](
     // 0: Aboriginal Australian Dot Painting - Earthy ochres with spiritual depth
     HistoricPalette(

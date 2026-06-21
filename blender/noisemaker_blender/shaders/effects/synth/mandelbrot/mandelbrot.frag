@@ -13,7 +13,7 @@ const float PI = 3.14159265359;
 const float TAU = 6.28318530718;
 const float BAILOUT = 256.0;  // Large bailout for smooth coloring
 const float LOG2 = 0.6931471805599453;
-const int MAX_ITER = 500;
+#define MAX_ITER 500
 
 // ============================================================================
 // Double-float (df64) arithmetic

@@ -5,25 +5,25 @@
  */
 
 // Dither type constants
-const int DITHER_BAYER_2X2 = 0;
-const int DITHER_BAYER_4X4 = 1;
-const int DITHER_BAYER_8X8 = 2;
-const int DITHER_DOT = 3;
-const int DITHER_LINE = 4;
-const int DITHER_CROSSHATCH = 5;
-const int DITHER_NOISE = 6;
+#define DITHER_BAYER_2X2 0
+#define DITHER_BAYER_4X4 1
+#define DITHER_BAYER_8X8 2
+#define DITHER_DOT 3
+#define DITHER_LINE 4
+#define DITHER_CROSSHATCH 5
+#define DITHER_NOISE 6
 
 // Palette constants
-const int PALETTE_INPUT = 0;
-const int PALETTE_MONOCHROME = 1;
-const int PALETTE_DOT_MATRIX_GREEN = 2;
-const int PALETTE_AMBER = 3;
-const int PALETTE_PICO8 = 4;
-const int PALETTE_C64 = 5;
-const int PALETTE_CGA = 6;
-const int PALETTE_ZX_SPECTRUM = 7;
-const int PALETTE_APPLE_II = 8;
-const int PALETTE_EGA = 9;
+#define PALETTE_INPUT 0
+#define PALETTE_MONOCHROME 1
+#define PALETTE_DOT_MATRIX_GREEN 2
+#define PALETTE_AMBER 3
+#define PALETTE_PICO8 4
+#define PALETTE_C64 5
+#define PALETTE_CGA 6
+#define PALETTE_ZX_SPECTRUM 7
+#define PALETTE_APPLE_II 8
+#define PALETTE_EGA 9
 
 // Bayer matrices
 const mat4 bayer2x2 = mat4(

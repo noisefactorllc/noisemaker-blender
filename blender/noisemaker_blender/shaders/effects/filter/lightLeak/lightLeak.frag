@@ -5,7 +5,7 @@
  */
 
 const float TAU = 6.28318530717958647692;
-const int POINT_COUNT = 6;
+#define POINT_COUNT 6
 
 // PCG PRNG
 uvec3 pcg(uvec3 v) {

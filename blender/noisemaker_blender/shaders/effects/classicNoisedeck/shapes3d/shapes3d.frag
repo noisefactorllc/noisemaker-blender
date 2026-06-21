@@ -27,7 +27,7 @@
 
 const float MIN_DIST = 0.01;
 const float MAX_DIST = 200.0;
-const int MAX_STEPS = 100;
+#define MAX_STEPS 100
 
 struct TransformData {
     vec2 staticSpin;
