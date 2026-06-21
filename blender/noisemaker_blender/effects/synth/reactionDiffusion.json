@@ -282,8 +282,7 @@
       "height": {
         "screenDivide": "zoom",
         "default": 8
-      },
-      "format": "rgba16f"
+      }
     }
   }
 }

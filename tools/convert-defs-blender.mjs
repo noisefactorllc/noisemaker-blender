@@ -213,8 +213,13 @@ function projectTexture (spec, is3D) {
   if (spec.height !== undefined) t.height = spec.height
   if (spec.depth !== undefined) t.depth = spec.depth
   if (is3D || spec.is3D) t.is3D = true
-  // Default mirrors extractTextureSpecs(): rgba16f when unspecified.
-  t.format = spec.format || 'rgba16f'
+  // Copy format ONLY when the reference declares it — the expander emits texture
+  // specs verbatim (`{...spec}`), and its parity golden is dumped BEFORE the
+  // `format || 'rgba16f'` default is applied (that default lives in the next
+  // stage, extractTextureSpecs()). Baking the default in here would inject a
+  // `format` key the reference spec doesn't have (e.g. navierStokes'
+  // global_ns_smoothed), breaking expander parity. Defaulting stays downstream.
+  if (spec.format !== undefined) t.format = spec.format
   return t
 }
 

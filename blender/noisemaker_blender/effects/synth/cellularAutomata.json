@@ -204,8 +204,7 @@
       "height": {
         "screenDivide": "zoom",
         "default": 32
-      },
-      "format": "rgba16f"
+      }
     }
   }
 }
