@@ -29,7 +29,7 @@ and [`PORTING-GUIDE.md`](PORTING-GUIDE.md).
 | Phase | State |
 |---|---|
 | P0 scaffold + GPU de-risk | ✅ (`blender/harness/spike_*.py`) |
-| P1 shader transpiler | ✅ 249/249 transpiled; **222 compile on Metal** (std140 UBO path + load-time MSL fixups: builtin-shadow rename, C++ alt-token rename, type-aware vecN==, mat2 vec-ctor, struct constructors, const-array params, prototype strip, scalar reflect/refract, multi-uniform-per-line split, explicit std140 named-block; only `scope`/`spectrum` left — audio input, out of scope; rest: staged MRT/varying) |
+| P1 shader transpiler | ✅ 249/249 transpiled; **255/257 programs compile on Metal — ALL but `scope`/`spectrum` (audio input, out of scope)**. `compile_check.py` now covers every path (fragment, **vertex+fragment**, **MRT**, **define-gated** via the effect's default defines; `skip=0`). Load-time MSL fixups: builtin-shadow rename, C++ alt-token rename, type-aware vecN==, mat2 vec-ctor, struct constructors, const-array params, prototype strip, scalar reflect/refract, v_texCoord→gl_FragCoord, multi-uniform-per-line split, std140 UBO + explicit named-block |
 | P2 backend + **Tier-1 parity gate** | ✅ **8/8 pass** (7 byte-identical, blur ±1) |
 | P4 single-pass sweep | ✅ **61/64 rendered pass** (NEAREST+CLAMP via texelFetch); 2 stateful→P3, 1 crt |
 | P3 executor: double-buffered surfaces, 3-tier ping-pong, iteration (`repeat`), `resolveDimension`, timed evolution (1800f @ 1/600) | ✅ |

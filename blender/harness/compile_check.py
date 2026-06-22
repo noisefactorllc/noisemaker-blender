@@ -16,8 +16,28 @@ import bpy
 HARNESS = os.path.dirname(os.path.abspath(__file__))
 ADDON = os.path.join(os.path.dirname(HARNESS), "noisemaker_blender")
 SHADERS = os.path.join(ADDON, "shaders", "effects")
+EFFECTS = os.path.join(ADDON, "effects")
 sys.path.insert(0, os.path.dirname(ADDON))
 from noisemaker_blender.backend import shader_build  # noqa: E402
+
+
+def default_defines(rel):
+    """The compile-time #defines a pass would normally inject, at the effect's DEFAULT values —
+    so define-gated shaders (render3d's INVERT/FILTERING, noise3d's OCTAVES/RIDGES/COLOR_MODE)
+    compile standalone exactly as they do in-pipeline (the graph supplies these per-pass). Read
+    from the effect definition's `define`-marked globals; bool -> 0/1 for GLSL."""
+    parts = rel.split("/")
+    if len(parts) < 2:
+        return {}
+    ej = os.path.join(EFFECTS, parts[0], parts[1] + ".json")
+    if not os.path.exists(ej):
+        return {}
+    out = {}
+    for g in json.load(open(ej)).get("globals", {}).values():
+        if isinstance(g, dict) and "define" in g:
+            v = g.get("default", 0)
+            out[g["define"]] = int(v) if isinstance(v, bool) else v
+    return out
 
 
 def run():
@@ -28,15 +48,23 @@ def run():
         if only and rel != only:
             continue
         desc = json.load(open(ci))
-        frag = open(ci[:-len(".createinfo.json")] + ".frag").read()
-        # skip the classes that need the vertex+fragment path / MRT / no-out (this harness
-        # uses the fragment-only build_shader). UBO is now supported -> no longer skipped.
+        base = ci[:-len(".createinfo.json")]
+        frag = open(base + ".frag").read()
+        # A render shader needs a fragment output. The only genuinely-unbuildable class is NO_OUT
+        # (gl_FragColor-style / no `out`); everything else compiles via the matching path:
+        #   - vertex:true  -> build_shader_vf (its own VS + varying interface): deposit/3D render
+        #   - MRT (>1 out) -> build_shader (create_from_info takes multiple fragment_out): agents/3D
         notes = " ".join(desc.get("notes", []))
-        if desc.get("vertex") or len(desc.get("fragmentOut", [])) != 1 or "VARYING" in notes or "NO_OUT" in notes:
+        if len(desc.get("fragmentOut", [])) == 0 or "NO_OUT" in notes:
             skip.append(rel)
             continue
+        defines = default_defines(rel)
         try:
-            shader_build.build_shader(frag, desc)
+            if desc.get("vertex"):
+                vert = open(base + ".vert").read()
+                shader_build.build_shader_vf(vert, frag, desc, defines)
+            else:
+                shader_build.build_shader(frag, desc, defines)
             ok.append(rel)
         except Exception as e:
             fail.append((rel, str(e).splitlines()[0] if str(e) else repr(e)))
