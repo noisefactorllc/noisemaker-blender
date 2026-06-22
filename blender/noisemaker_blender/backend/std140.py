@@ -77,20 +77,40 @@ _SHADOWABLE = frozenset(("max", "min", "mod", "mix", "clamp", "step", "smoothste
 _CPP_ALT_TOKENS = frozenset(("and", "or", "xor", "not", "bitand", "bitor", "compl",
                              "and_eq", "or_eq", "xor_eq", "not_eq"))
 
-# Match `<lvalue> ==|!= vecN(...)` with a simple lvalue (ident + optional .swizzle) and a
-# non-nested constructor RHS — the vecN==vecN comparisons that Blender MSL turns into a bvecN
-# (rejected in bool contexts: `||`, `&&`, `?:`). GLSL says vecN==vecN is a SCALAR bool, so
-# `all(equal(...))` / `any(notEqual(...))` is exactly equivalent and compiles everywhere.
-_VEC_CMP = __import__("re").compile(r"([A-Za-z_][\w.]*)\s*(==|!=)\s*(i?vec[234]\s*\([^()]*\))")
+# vecN ==/!= vecN comparisons: GLSL says these are a SCALAR bool, but Blender MSL makes a bvecN
+# (rejected in bool contexts: `||`, `&&`, `?:`, `if`). Rewrite to all(equal(...))/any(notEqual)),
+# exactly equivalent. Type-lite: an operand is a vector if it's a vecN(...) constructor, a
+# >=2-char swizzle, or an identifier declared `vecN name` somewhere in the source. Only rewrite
+# when BOTH operands are vectors — scalar `a == 1.0` / `coord.x == 1.0` stay untouched.
+_VEC_DECL = __import__("re").compile(r"\bi?vec[234]\s+([A-Za-z_]\w*)")
+# Constructor alternative FIRST so `vec2(1.0)` matches as a whole, not as the bare ident `vec2`.
+_OPERAND = r"(?:i?vec[234]\s*\([^()]*\)|[A-Za-z_][\w.]*)"
+_VEC_CMP = __import__("re").compile(r"(%s)\s*(==|!=)\s*(%s)" % (_OPERAND, _OPERAND))
+_SWIZZLE = set("xyzwrgbastpq")
+
+
+def _is_vec_operand(op, vecvars):
+    op = op.strip()
+    if __import__("re").match(r"i?vec[234]\s*\(", op):
+        return True
+    if "." in op:
+        sw = op.rsplit(".", 1)[1]
+        return len(sw) >= 2 and all(c in _SWIZZLE for c in sw)
+    return op in vecvars
 
 
 def fix_vec_bool_compare(src):
-    """vecN ==/!= vecN(...) -> all(equal(...)) / any(notEqual(...)). The transpiler's
-    fixVecBoolTernary handles the single-comparison-before-`?` case; this also catches compound
-    boolean contexts (`a == vec2(1) || a == vec2(3)`), e.g. colorLab. Semantically identical."""
+    """vecN ==/!= vecN -> all(equal(...)) / any(notEqual(...)) (incl. var==var like cellSplit's
+    `cellId == nearestCell` and compound `a==vec2(1)||a==vec2(3)` like colorLab). The transpiler's
+    fixVecBoolTernary only catches the single-compare-before-`?` constructor case."""
+    vecvars = set(_VEC_DECL.findall(src))
+
     def repl(m):
         lhs, op, rhs = m.group(1), m.group(2), m.group(3)
-        return ("all(equal(%s, %s))" if op == "==" else "any(notEqual(%s, %s))") % (lhs, rhs)
+        if _is_vec_operand(lhs, vecvars) and _is_vec_operand(rhs, vecvars):
+            return ("all(equal(%s, %s))" if op == "==" else "any(notEqual(%s, %s))") \
+                % (lhs.strip(), rhs.strip())
+        return m.group(0)
     return _VEC_CMP.sub(repl, src)
 
 
