@@ -1,8 +1,6 @@
 #define nmTex(s, uv) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))), ivec2(0), textureSize((s),0)-ivec2(1)), 0))
 // Wobble effect - offsets the entire frame using noise-driven jitter
 
-in vec2 v_texCoord;
-
 const float TAU = 6.28318530717959;
 const vec3 X_NOISE_SEED = vec3(17.0, 29.0, 11.0);
 const vec3 Y_NOISE_SEED = vec3(41.0, 23.0, 7.0);
@@ -88,7 +86,7 @@ void main() {
     vec2 offset = (vec2(xRandom, yRandom) - 0.5) * offsetScale;
 
     // Apply offset to texture coordinate
-    vec2 sampleCoord = v_texCoord + offset;
+    vec2 sampleCoord = (gl_FragCoord.xy / vec2(textureSize(inputTex, 0))) + offset;
     sampleCoord = applyWrap(sampleCoord);
 
     vec4 sampled = nmTex(inputTex, sampleCoord);

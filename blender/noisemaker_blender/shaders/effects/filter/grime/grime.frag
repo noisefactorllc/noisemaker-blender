@@ -6,8 +6,6 @@
  * dropout specks, and sparse noise blended to dirty the input.
  */
 
-in vec2 v_texCoord;
-
 float clamp01(float v) {
     return clamp(v, 0.0, 1.0);
 }
@@ -126,10 +124,10 @@ float refracted_exponential(vec2 uv, vec2 freq, vec2 px, float disp, float s) {
 
 void main() {
     vec2 tileSize = vec2(textureSize(inputTex, 0));
-    vec2 globalCoord = v_texCoord * tileSize + tileOffset;
+    vec2 globalCoord = (gl_FragCoord.xy / vec2(textureSize(inputTex, 0))) * tileSize + tileOffset;
     vec2 globalUV = globalCoord / fullResolution;
     vec2 px = 1.0 / fullResolution;
-    vec4 base_color = nmTex(inputTex, v_texCoord);
+    vec4 base_color = nmTex(inputTex, (gl_FragCoord.xy / vec2(textureSize(inputTex, 0))));
 
     float str = max(strength, 0.0);
     float s = seed;

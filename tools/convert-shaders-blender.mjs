@@ -126,6 +126,19 @@ function liftUniformBlock (body, ns, name) {
   return { body, uniformBlock: { struct: bm[1], instance: 'nm_ub', members, layout } }
 }
 
+// The reference full-screen vertex shader supplies `v_texCoord = a_position*0.5+0.5` (the quad's
+// 0..1 coord, bottom-up); the Blender port's full-screen VS does not. For a 1:1 full-screen filter
+// that varying is exactly `gl_FragCoord.xy / vec2(textureSize(inputTex,0))` (pixel-center, bottom-up
+// — same value the reference interpolates). Strip the decl + rewrite refs (grime/spookyTicker/
+// texture/wobble). `textureSize` survives the later texture()->nmTex rewrite (it's not `texture(`).
+function fixFragmentVarying (body, samplers) {
+  if (!/\bin\s+vec2\s+v_texCoord\s*;/.test(body)) return body
+  const s = samplers.find(x => x[2] === 'inputTex') || samplers[0]
+  if (!s) return body
+  body = body.replace(/^[ \t]*in\s+vec2\s+v_texCoord\s*;[ \t]*(?:\/\/.*)?\n?/m, '')
+  return body.replace(/\bv_texCoord\b/g, `(gl_FragCoord.xy / vec2(textureSize(${s[2]}, 0)))`)
+}
+
 function splitTopLevel (s) {
   const out = []; let depth = 0, cur = ''
   for (const ch of s) {
@@ -245,6 +258,10 @@ function transpile (src, ns, name) {
   const samplers = []; let sm
   while ((sm = samplerRe.exec(body)) !== null) samplers.push([samplers.length, 'FLOAT_2D', sm[1]])
   body = body.replace(samplerRe, '')
+
+  // 2b. resolve the reference full-screen `v_texCoord` varying to a gl_FragCoord expression
+  // (needs the sampler list; do it before the FRAGMENT_VARYING flag check below).
+  body = fixFragmentVarying(body, samplers)
 
   // 3. push-constants (scalars/vec/mat, excluding arrays which we leave + flag).
   const uniRe = new RegExp(`^[ \\t]*uniform[ \\t]+(${SCALAR_VEC_MAT})[ \\t]+([A-Za-z_]\\w*)[ \\t]*;[ \\t]*(?://.*)?$`, 'gm')

@@ -30,7 +30,5 @@
   "uniformAliases": {},
   "std140Bytes": 16,
   "ubo": false,
-  "notes": [
-    "FRAGMENT_VARYING (in …) — needs interface info, staged"
-  ]
+  "notes": []
 }

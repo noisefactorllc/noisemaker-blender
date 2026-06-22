@@ -13,8 +13,6 @@
 #define MODE 3
 #endif
 
-in vec2 v_texCoord;
-
 const float PI = 3.14159265359;
 const float INV_UINT32_MAX = 1.0 / 4294967295.0;
 #define Z_LOOP 2
@@ -179,7 +177,7 @@ float height_field(vec2 uv, vec2 base_freq, float motion) {
 }
 
 void main() {
-    vec4 base_color = nmTex(inputTex, v_texCoord);
+    vec4 base_color = nmTex(inputTex, (gl_FragCoord.xy / vec2(textureSize(inputTex, 0))));
     vec2 dims = vec2(textureSize(inputTex, 0));
     vec2 pixel_step = 1.0 / dims;
 
@@ -199,11 +197,11 @@ void main() {
     float motion = time * float(Z_LOOP);
 
     // Sample height field at center and 4 neighbors for gradient
-    float h_center = height_field(v_texCoord, base_freq, motion);
-    float h_right  = height_field(v_texCoord + vec2(pixel_step.x, 0.0), base_freq, motion);
-    float h_left   = height_field(v_texCoord - vec2(pixel_step.x, 0.0), base_freq, motion);
-    float h_up     = height_field(v_texCoord + vec2(0.0, pixel_step.y), base_freq, motion);
-    float h_down   = height_field(v_texCoord - vec2(0.0, pixel_step.y), base_freq, motion);
+    float h_center = height_field((gl_FragCoord.xy / vec2(textureSize(inputTex, 0))), base_freq, motion);
+    float h_right  = height_field((gl_FragCoord.xy / vec2(textureSize(inputTex, 0))) + vec2(pixel_step.x, 0.0), base_freq, motion);
+    float h_left   = height_field((gl_FragCoord.xy / vec2(textureSize(inputTex, 0))) - vec2(pixel_step.x, 0.0), base_freq, motion);
+    float h_up     = height_field((gl_FragCoord.xy / vec2(textureSize(inputTex, 0))) + vec2(0.0, pixel_step.y), base_freq, motion);
+    float h_down   = height_field((gl_FragCoord.xy / vec2(textureSize(inputTex, 0))) - vec2(0.0, pixel_step.y), base_freq, motion);
 
     float gx = h_right - h_left;
     float gy = h_down - h_up;
