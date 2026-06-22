@@ -19,10 +19,6 @@
 #define ZONE_META_SLOT 2
 #define ZONE_VERTS_SLOT 10
 
-layout(std140) uniform RemapUniforms {
-    vec4 data[267];
-};
-
 // Auto-filled when noisedeck is doing a tiled large-resolution export.
 // When not tiling: tileOffset = (0, 0), fullResolution = resolution.
 

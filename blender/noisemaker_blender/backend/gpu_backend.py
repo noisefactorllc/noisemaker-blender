@@ -273,6 +273,15 @@ class GpuBackend:
         else:
             for ctype, name in fields:
                 self._set_uniform(shader, ctype, name, merged.get(rev.get(name, name)))
+        blk = desc.get("uniformBlock")
+        if blk:
+            # explicit std140 block (remap's zone-config UBO) bound alongside push constants. Pack
+            # the logical zone uniforms into the array via the effect's layout (port of webgl2
+            # packUniformsWithLayout). Hold the ref on self so it outlives the draw.
+            slots = blk["members"][0][2]
+            packed = std140.pack_with_layout(merged, blk["layout"], slots)
+            self._live_block_ubo = GPUUniformBuf(Buffer('FLOAT', len(packed), packed))
+            shader.uniform_block(blk["instance"], self._live_block_ubo)
         for slot, stype, name in desc.get("samplers", []):
             tid = inputs.get(rev.get(name, name))
             if tid is not None:

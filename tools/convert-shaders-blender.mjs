@@ -102,6 +102,30 @@ function splitMultiUniformLines (src) {
   return src.replace(/;[ \t]*(?=uniform\b)/g, ';\n')
 }
 
+// Explicit `layout(std140) uniform <Struct> { <members> };` block (synth/remap's `vec4 data[267]`
+// zone-config UBO). Metal's create_from_info forbids inline `layout(...)`/`uniform` in the body, so
+// lift the block into the descriptor (struct + members + the effect's packing layout) and strip it.
+// The body's member refs are qualified to `<instance>.<member>` at shader-build time; the backend
+// packs the logical zone uniforms into the block via the layout (mirrors webgl2 packUniformsWithLayout).
+function liftUniformBlock (body, ns, name) {
+  const blockRe = /layout\s*\(\s*std140\s*\)\s*uniform\s+(\w+)\s*\{([^}]*)\}\s*;/
+  const bm = blockRe.exec(body)
+  if (!bm) return { body, uniformBlock: null }
+  const members = []
+  for (const decl of bm[2].split(';')) {
+    const mm = /^(\w+)\s+(\w+)\s*(?:\[\s*(\d+)\s*\])?$/.exec(decl.trim())
+    if (mm) members.push([mm[1], mm[2], mm[3] ? Number(mm[3]) : 0])
+  }
+  body = body.replace(blockRe, '')
+  // the packing map (uniform name -> {slot, components}) lives in the converted effect definition.
+  let layout = null
+  const effJson = resolve(OUT_DIR, '..', '..', 'effects', ns, name + '.json')
+  if (existsSync(effJson)) {
+    try { layout = JSON.parse(readFileSync(effJson, 'utf8')).uniformLayout || null } catch { /* leave null */ }
+  }
+  return { body, uniformBlock: { struct: bm[1], instance: 'nm_ub', members, layout } }
+}
+
 function splitTopLevel (s) {
   const out = []; let depth = 0, cur = ''
   for (const ch of s) {
@@ -178,7 +202,7 @@ function std140Bytes (pushConstants) {
   return Math.ceil(off / 16) * 16 // blocks round to 16
 }
 
-function transpile (src) {
+function transpile (src, ns, name) {
   const notes = []
   const lines = src.split('\n')
 
@@ -203,6 +227,12 @@ function transpile (src) {
   body = fixVecBoolTernary(body)
   body = flattenStructArrays(body)
   body = splitMultiUniformLines(body)
+
+  // lift an explicit `layout(std140) uniform {…}` block (remap's zone-config UBO) before the
+  // generic uniform parse, so its inner members aren't mistaken for push constants.
+  const blk = liftUniformBlock(body, ns, name)
+  body = blk.body
+  if (blk.uniformBlock && !blk.uniformBlock.layout) notes.push(`UNIFORM_BLOCK_NO_LAYOUT (${blk.uniformBlock.struct})`)
 
   // flag uniform arrays (audio waveform/spectrum — out of scope) before generic uniform parse.
   const arrayRe = /^[ \t]*uniform[ \t]+\w+[ \t]+([A-Za-z_]\w*)[ \t]*\[/gm
@@ -262,6 +292,7 @@ function transpile (src) {
   // tidy: collapse the runs of blank lines the deletions leave behind.
   const frag = nearestPreamble + body.replace(/\n{3,}/g, '\n\n').trim() + '\n'
   const descriptor = { pushConstants, samplers, fragmentOut, uniformAliases, std140Bytes: bytes, ubo, notes }
+  if (blk.uniformBlock) descriptor.uniformBlock = blk.uniformBlock
   return { frag, descriptor, notes }
 }
 
@@ -421,7 +452,7 @@ function main () {
     try {
       res = kind === 'vertfrag'
         ? transpileVertFrag(readFileSync(prog.vertPath, 'utf8'), readFileSync(prog.fragPath, 'utf8'))
-        : transpile(readFileSync(prog.path, 'utf8'))
+        : transpile(readFileSync(prog.path, 'utf8'), ns, name)
     } catch (err) {
       flagged++; flags.push(`${ns}/${name}/${program}: THREW ${err?.message || err}`); continue
     }

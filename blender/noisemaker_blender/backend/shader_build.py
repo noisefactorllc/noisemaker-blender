@@ -16,7 +16,9 @@ def _uniforms(info, descriptor):
     """Declare a descriptor's scalar/vector uniforms — either as push constants, or (when the
     block exceeds Metal's 128-byte push-constant limit, descriptor['ubo']) as a std140 uniform
     block. Returns True iff the UBO path was taken (the body then needs its bare uniform refs
-    qualified into the block). See backend/std140.py + docs/BLENDER-PLATFORM-NOTES.md."""
+    qualified into the block). An effect may ALSO declare an explicit `layout(std140) uniform {…}`
+    block (descriptor['uniformBlock'], remap's zone-config `vec4 data[267]`); that is emitted as a
+    second uniform_buf ALONGSIDE the push constants. See backend/std140.py + docs/BLENDER-PLATFORM-NOTES.md."""
     fields = descriptor.get("pushConstants", [])
     if descriptor.get("ubo"):
         info.typedef_source(std140.struct_source(fields))
@@ -24,6 +26,12 @@ def _uniforms(info, descriptor):
         return True
     for ctype, name in fields:
         info.push_constant(ctype, name)
+    blk = descriptor.get("uniformBlock")
+    if blk:
+        # an explicit `layout(std140) uniform {…}` block (remap's zone-config UBO), bound ALONGSIDE
+        # the push constants. Verified to coexist by spike_remap_ubo.py.
+        info.typedef_source(std140.block_struct_source(blk))
+        info.uniform_buf(0, blk["struct"], blk["instance"])
     return False
 
 
@@ -43,7 +51,8 @@ def _body(src, is_ubo, descriptor):
         calling a builtin once a same-named local is in scope;
       - vecN==vecN(...) -> all(equal(...)) in bool contexts (compound case the transpiler misses);
       - scalar reflect/refract -> injected nm_reflect/nm_refract (Metal has no scalar overload);
-      - for UBO effects, qualify bare uniform refs into the std140 block (scope-aware), last.
+      - for UBO effects, qualify bare uniform refs into the std140 block (scope-aware);
+      - for an explicit `layout(std140)` block (remap), qualify its member refs -> <instance>.<member>.
     See backend/std140.py + docs/BLENDER-PLATFORM-NOTES.md."""
     src = std140.remove_redundant_prototypes(src)
     src = std140.const_array_params(src)
@@ -55,6 +64,10 @@ def _body(src, is_ubo, descriptor):
     src = std140.fix_scalar_reflect_refract(src)
     if is_ubo:
         src = std140.rewrite_uniform_refs(src, descriptor.get("pushConstants", []))
+    blk = descriptor.get("uniformBlock")
+    if blk:                                    # qualify the block's member refs -> <instance>.<member>
+        members = [(t, n) for t, n, _c in blk["members"]]
+        src = std140.rewrite_uniform_refs(src, members, instance=blk["instance"])
     return src
 
 

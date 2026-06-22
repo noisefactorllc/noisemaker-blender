@@ -385,8 +385,8 @@ def rename_shadow_builtins(src):
     return "".join(out)
 
 
-def rewrite_uniform_refs(src, fields):
-    """Rewrite references to the uniform names in `src` to `nm_ub.<name>`, SCOPE-AWARE: a name
+def rewrite_uniform_refs(src, fields, instance=INSTANCE):
+    """Rewrite references to the uniform names in `src` to `<instance>.<name>`, SCOPE-AWARE: a name
     declared as a function parameter or local variable shadows the uniform (GLSL scoping), so
     that declaration and its in-scope uses are left untouched. This is what an anonymous std140
     block would give for free — but Blender's create_from_info only supports a NAMED block, so
@@ -431,7 +431,7 @@ def rewrite_uniform_refs(src, fields):
                     (pending if paren > 0 else scopes[-1]).add(t)
                 out.append(t); last_sig = t
             elif t in U and not any(t in s for s in scopes):  # a genuine uniform reference
-                out.append(INSTANCE + "." + t); last_sig = t
+                out.append(instance + "." + t); last_sig = t
             else:
                 out.append(t); last_sig = t
         else:
@@ -464,3 +464,46 @@ def pack(fields, values):
     # np.frombuffer preserves the exact bytes (incl. int bit patterns that look like NaN
     # floats) — pure-Python float() round-trips would not.
     return np.frombuffer(bytes(buf), dtype=np.float32).copy()
+
+
+# ---- explicit std140 block (remap's `layout(std140) uniform RemapUniforms { vec4 data[267]; }`) --
+# A named block declared in the shader (not auto-lifted from scalar uniforms). Its single array
+# member is filled by packing the effect's LOGICAL uniforms (bgColor, zoneN_vK, …) into vec4 slots
+# per the effect's uniformLayout — a direct port of the reference webgl2 packUniformsWithLayout.
+_COMP_IDX = {"x": 0, "y": 1, "z": 2, "w": 3}
+
+
+def block_struct_source(blk):
+    """GLSL struct typedef for an explicit std140 block: `struct <Struct> { <type> <name>[N]; … };`."""
+    body = "".join("  %s %s%s;\n" % (t, n, ("[%d]" % c) if c else "") for t, n, c in blk["members"])
+    return "struct %s {\n%s};\n" % (blk["struct"], body)
+
+
+def pack_with_layout(uniforms, layout, slots):
+    """Pack logical uniforms into a std140 block buffer using a {name: {slot, components}} layout
+    (port of webgl2 packUniformsWithLayout). `slots` = the block array length (vec4 count); the
+    buffer is slots*4 floats. Each entry writes its value's components starting at
+    slot*4 + componentIndex(first component). Missing values stay zero; width/height/channels
+    resolve from `resolution` like the reference."""
+    buf = np.zeros(slots * 4, dtype=np.float32)
+    for name, spec in layout.items():
+        v = uniforms.get(name)
+        if v is None:
+            res = uniforms.get("resolution")
+            if name == "width" and res is not None:
+                v = res[0]
+            elif name == "height" and res is not None:
+                v = res[1]
+            elif name == "channels":
+                v = 4.0
+            else:
+                continue
+        comps = spec["components"]
+        base = spec["slot"] * 4 + _COMP_IDX[comps[0]]
+        if len(comps) == 1:
+            buf[base] = 1.0 if v is True else (0.0 if v is False else float(v))
+        else:
+            seq = list(v) if isinstance(v, (list, tuple)) else [v]
+            for i in range(min(len(seq), len(comps))):
+                buf[base + i] = float(seq[i])
+    return buf
