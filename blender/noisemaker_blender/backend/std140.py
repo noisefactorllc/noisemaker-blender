@@ -160,6 +160,49 @@ def fix_struct_constructors(src):
     return src
 
 
+# Array-typed function parameters. Blender lowers `vec3 pal[4]` to a mutable `vec3*`, but the
+# corpus passes `const` global arrays to them (dither's palettes) -> "cannot initialize a parameter
+# of type 'vec3 *' with an lvalue of type 'const vec3[4]'". GLSL default (`in`) array params are
+# read-only copies, so const-qualifying them is semantically exact and lets the const arg bind.
+# Matches an array param right after a `(`/`,` separator (locals/globals start a statement, not a
+# param list, so they're never touched); existing const/out/inout params are left as-is. Verified
+# by spike_dither.py (non-const REPRO fails, const FIX compiles).
+_ARRAY_PARAM = __import__("re").compile(
+    r"([,(]\s*)((?:const\s+|in\s+|out\s+|inout\s+)*)"
+    r"((?:i?vec[234]|u?vec[234]|bvec[234]|float|int|uint|bool|mat[234])\s+\w+\s*\[)")
+
+
+def const_array_params(src):
+    """Const-qualify `in` (unqualified) array function parameters so a `const` global array binds.
+    A no-op for out/inout/already-const params and for anything not in a parameter list."""
+    def repl(m):
+        sep, quals, decl = m.group(1), m.group(2), m.group(3)
+        if "const" in quals or "out" in quals:        # 'out' also matches 'inout'
+            return m.group(0)
+        return sep + "const " + quals + decl
+    return _ARRAY_PARAM.sub(repl, src)
+
+
+# Function prototypes (`T name(args);`) that are later DEFINED. Blender wraps every function as a
+# member of one MSL class, where a prototype + definition is "class member cannot be redeclared"
+# (ANGLE accepts it; members are visible regardless of order, so the prototype is pure redundancy).
+# Anchored at line start with a real return type, so call statements (`return foo(x);`) never match.
+_PROTO_LINE = __import__("re").compile(
+    r"^[ \t]*(?:i?vec[234]|u?vec[234]|bvec[234]|float|int|uint|bool|void|mat[234])"
+    r"\s+(\w+)\s*\([^()]*\)\s*;[ \t]*\n", __import__("re").M)
+
+
+def remove_redundant_prototypes(src):
+    """Drop a forward prototype when the same function is defined later (the definition stands on
+    its own under Metal). Leaves prototypes with no in-file definition untouched. (dither.)"""
+    def repl(m):
+        name = m.group(1)
+        if __import__("re").search(r"\b%s\s*\([^()]*\)\s*\{" % __import__("re").escape(name), src):
+            return ""
+        return m.group(0)
+    return _PROTO_LINE.sub(repl, src)
+
+
 def rename_cpp_alt_tokens(src):
     """Rename identifiers that are C++ alternative tokens (`or`/`and`/`xor`/...) to `nm_<name>`
     — they're keywords in Metal's C++ compiler. Tokenized so comments and member accesses are

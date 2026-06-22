@@ -36,12 +36,16 @@ def _header(defines):
 
 def _body(src, is_ubo, descriptor):
     """Load-time GLSL->MSL-compat fix-ups (all no-ops when nothing matches):
+      - drop forward prototypes that are later defined (Metal class-member redeclaration);
+      - const-qualify `in` array function params (so const global arrays bind under Metal);
       - rename C++ alternative-token identifiers (`or`/`and`/...) — Metal keywords;
       - rename locals shadowing GLSL builtins (`float max = max(...)`) — Blender MSL rejects
         calling a builtin once a same-named local is in scope;
       - vecN==vecN(...) -> all(equal(...)) in bool contexts (compound case the transpiler misses);
       - for UBO effects, qualify bare uniform refs into the std140 block (scope-aware), last.
     See backend/std140.py + docs/BLENDER-PLATFORM-NOTES.md."""
+    src = std140.remove_redundant_prototypes(src)
+    src = std140.const_array_params(src)
     src = std140.fix_struct_constructors(src)
     src = std140.rename_cpp_alt_tokens(src)
     src = std140.rename_shadow_builtins(src)
