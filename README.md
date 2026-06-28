@@ -80,7 +80,7 @@ chain effects, write the result to an output surface (`.write(o0)`), then pick o
 (`render(o0)`).
 
 Ready-to-bake examples live in [`parity/programs/`](parity/programs). The flagship is
-[`parity/programs/north_star.dsl`](parity/programs/north_star.dsl) — a 32-pass program (3D noise →
+[`parity/programs/north_star.dsl`](parity/programs/north_star.dsl) — a 33-pass program (3D noise →
 chaotic particle flow → fluid → color, lighting, and lens).
 
 ## Good to know
@@ -109,8 +109,9 @@ evolved or animated result.
 
 ## What works today
 
-- The **whole 2D effect catalog** (~180 effects across 8 namespaces) renders, and is
-  **pixel-identical to the web reference** within 8-bit rounding.
+- The **2D single-pass catalog plus agent-deposit** is **pixel-identical to the web reference**
+  (byte-exact / ±1); chaotic continuous sims are chaos-gated (below). In all, **184 effect
+  definitions** span 8 namespaces (including the 3D `synth3d` / `filter3d`).
 - **Particle/agent sims, fluid (navier–stokes), and the 3D volume renderer** all render and match the
   reference.
 - **Chaotic** programs (chaotic agent flows feeding fluid, continuous cellular automata) render
@@ -146,6 +147,8 @@ against the reference engine, so it needs a checkout of it via `NM_REFERENCE_ROO
 ```sh
 NM_BLENDER=<blender> NM_GRADE_PY=<blender-python> bash parity/integration.sh
 #   -> end-to-end: DSL → bake → Image datablock, graded byte-exact
+#   (first seed parity/out/ goldens — see STATUS.md "Running the parity gates";
+#    on a fresh clone parity/out/ is git-ignored and empty)
 ```
 
 Full gate commands (compiler, effects, integration) and how to add an effect: **[STATUS.md](STATUS.md)**

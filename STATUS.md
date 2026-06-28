@@ -18,7 +18,7 @@ whole catalog except the two audio synths `scope` / `spectrum` (audio input is o
 | `mixer` | 15 | renders (whole namespace) |
 | `classicNoisedeck` | 20 | renders — legacy generators |
 | `points` / `render` | 10 / 11 | renders — agents; deposit/billboards byte-identical, chaotic flows chaos-gated |
-| `synth3d` / `filter3d` | 7 / 2 | renders — 3D volumes, raymarch, cubemaps (byte-exact / 1-ULP) |
+| `synth3d` / `filter3d` | 7 / 2 | renders — 3D volumes, raymarch, cubemaps (byte-exact / 1-ULP); filter3d: palette3d byte-exact, flow3d (3D flow sim) chaos-gated |
 
 ## Parity
 
