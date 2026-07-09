@@ -1,0 +1,69 @@
+{
+  "name": "Median",
+  "namespace": "filter",
+  "func": "median",
+  "tags": [
+    "blur"
+  ],
+  "paramAliases": {},
+  "globals": {
+    "iterations": {
+      "type": "int",
+      "default": 1,
+      "uniform": "iterations",
+      "min": 1,
+      "max": 8
+    },
+    "threshold": {
+      "type": "float",
+      "default": 0,
+      "uniform": "threshold",
+      "min": 0,
+      "max": 100
+    }
+  },
+  "passes": [
+    {
+      "name": "seed",
+      "program": "medianSeed",
+      "inputs": {
+        "inputTex": "inputTex"
+      },
+      "outputs": {
+        "fragColor": "global_median_state"
+      },
+      "uniforms": {}
+    },
+    {
+      "name": "medianPass",
+      "program": "medianPass",
+      "inputs": {
+        "inputTex": "global_median_state"
+      },
+      "outputs": {
+        "fragColor": "global_median_state"
+      },
+      "uniforms": {},
+      "repeat": "iterations"
+    },
+    {
+      "name": "final",
+      "program": "medianFinal",
+      "inputs": {
+        "inputTex": "inputTex",
+        "medTex": "global_median_state"
+      },
+      "outputs": {
+        "fragColor": "outputTex"
+      },
+      "uniforms": {}
+    }
+  ],
+  "textures": {
+    "global_median_state": {
+      "width": "input",
+      "height": "input",
+      "format": "rgba16f"
+    }
+  }
+}

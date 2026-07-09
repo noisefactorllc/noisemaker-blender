@@ -1,0 +1,71 @@
+{
+  "name": "High Pass",
+  "namespace": "filter",
+  "func": "highPass",
+  "tags": [
+    "edges"
+  ],
+  "paramAliases": {},
+  "globals": {
+    "radius": {
+      "type": "float",
+      "default": 10,
+      "uniform": "radius",
+      "min": 0.5,
+      "max": 100
+    },
+    "mono": {
+      "type": "boolean",
+      "default": false,
+      "uniform": "mono"
+    }
+  },
+  "passes": [
+    {
+      "name": "blurH",
+      "program": "hpBlurH",
+      "inputs": {
+        "inputTex": "inputTex"
+      },
+      "outputs": {
+        "fragColor": "_hpBlurH"
+      },
+      "uniforms": {}
+    },
+    {
+      "name": "blurV",
+      "program": "hpBlurV",
+      "inputs": {
+        "inputTex": "_hpBlurH"
+      },
+      "outputs": {
+        "fragColor": "_hpBlur"
+      },
+      "uniforms": {}
+    },
+    {
+      "name": "combine",
+      "program": "hpCombine",
+      "inputs": {
+        "inputTex": "inputTex",
+        "blurTex": "_hpBlur"
+      },
+      "outputs": {
+        "fragColor": "outputTex"
+      },
+      "uniforms": {}
+    }
+  ],
+  "textures": {
+    "_hpBlurH": {
+      "width": "input",
+      "height": "input",
+      "format": "rgba8unorm"
+    },
+    "_hpBlur": {
+      "width": "input",
+      "height": "input",
+      "format": "rgba8unorm"
+    }
+  }
+}

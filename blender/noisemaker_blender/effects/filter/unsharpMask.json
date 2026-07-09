@@ -1,0 +1,81 @@
+{
+  "name": "Unsharp Mask",
+  "namespace": "filter",
+  "func": "unsharpMask",
+  "tags": [
+    "edges"
+  ],
+  "paramAliases": {},
+  "globals": {
+    "amount": {
+      "type": "float",
+      "default": 60,
+      "uniform": "amount",
+      "min": 0,
+      "max": 500,
+      "zero": 0
+    },
+    "radius": {
+      "type": "float",
+      "default": 4,
+      "uniform": "radius",
+      "min": 0.5,
+      "max": 50
+    },
+    "threshold": {
+      "type": "float",
+      "default": 0,
+      "uniform": "threshold",
+      "min": 0,
+      "max": 100
+    }
+  },
+  "passes": [
+    {
+      "name": "blurH",
+      "program": "usmBlurH",
+      "inputs": {
+        "inputTex": "inputTex"
+      },
+      "outputs": {
+        "fragColor": "_usmBlurH"
+      },
+      "uniforms": {}
+    },
+    {
+      "name": "blurV",
+      "program": "usmBlurV",
+      "inputs": {
+        "inputTex": "_usmBlurH"
+      },
+      "outputs": {
+        "fragColor": "_usmBlur"
+      },
+      "uniforms": {}
+    },
+    {
+      "name": "combine",
+      "program": "usmCombine",
+      "inputs": {
+        "inputTex": "inputTex",
+        "blurTex": "_usmBlur"
+      },
+      "outputs": {
+        "fragColor": "outputTex"
+      },
+      "uniforms": {}
+    }
+  ],
+  "textures": {
+    "_usmBlurH": {
+      "width": "input",
+      "height": "input",
+      "format": "rgba8unorm"
+    },
+    "_usmBlur": {
+      "width": "input",
+      "height": "input",
+      "format": "rgba8unorm"
+    }
+  }
+}
