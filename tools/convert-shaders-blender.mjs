@@ -296,12 +296,24 @@ function transpile (src, ns, name) {
 
   // 5. force NEAREST+CLAMP sampling. Blender's gpu module has NO sampler-state API and defaults
   // to LINEAR/REPEAT, but the reference creates every surface NEAREST + CLAMP_TO_EDGE (load-bearing
-  // for warp/resample effects). Rewrite each 2-arg texture(s,uv) to an exact texelFetch (all 567
-  // reference calls are 2-arg; texelFetch/textureSize are already used by the reference directly).
+  // for warp/resample effects). Rewrite each 2-arg texture(s,uv) to an exact texelFetch (the vast
+  // majority of reference calls are 2-arg; texelFetch/textureSize are already used by the reference
+  // directly). A minority (e.g. filter/parallax's ray march) call the explicit-LOD 3-arg
+  // textureLod(s,uv,lod) instead -- left unrewritten this silently keeps Blender's default
+  // LINEAR/REPEAT sampler, which desyncs fractional-UV lookups from the reference's NEAREST/CLAMP
+  // path (caught via parity: widespread small diffs plus large outliers at wrap boundaries). Since
+  // every render target here is a single mip level, the requested lod is always a no-op -- reuse
+  // the same texelFetch body under a second macro that just ignores its 3rd arg.
   let nearestPreamble = ''
   if (samplers.length) {
     body = body.replace(/\btexture\s*\(/g, 'nmTex(')
-    nearestPreamble =
+    if (/\btextureLod\s*\(/.test(body)) {
+      body = body.replace(/\btextureLod\s*\(/g, 'nmTexLod(')
+      nearestPreamble +=
+        '#define nmTexLod(s, uv, lod) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))),'
+        + ' ivec2(0), textureSize((s),0)-ivec2(1)), 0))\n'
+    }
+    nearestPreamble +=
       '#define nmTex(s, uv) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))),'
       + ' ivec2(0), textureSize((s),0)-ivec2(1)), 0))\n'
   }
@@ -387,14 +399,21 @@ function transpileVertFrag (vertSrc, fragSrc) {
   // attribute-less draws (points/billboards) need a dummy attr so the vert buffer can size the draw.
   if (vertexIn.length === 0) vertexIn.push([0, 'FLOAT', 'nm_dummy'])
 
-  // NEAREST+CLAMP rewrite, applied per stage only if it actually samples via 2-arg texture().
+  // NEAREST+CLAMP rewrite, applied per stage if it samples via 2-arg texture() and/or textureLod().
   let preamble = ''
   if (samplers.length) {
     const before = vbody + ' ' + fbody
     vbody = vbody.replace(/\btexture\s*\(/g, 'nmTex(')
     fbody = fbody.replace(/\btexture\s*\(/g, 'nmTex(')
     if ((vbody + ' ' + fbody) !== before) {
-      preamble = '#define nmTex(s, uv) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))),'
+      preamble += '#define nmTex(s, uv) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))),'
+        + ' ivec2(0), textureSize((s),0)-ivec2(1)), 0))\n'
+    }
+    const beforeLod = vbody + ' ' + fbody
+    vbody = vbody.replace(/\btextureLod\s*\(/g, 'nmTexLod(')
+    fbody = fbody.replace(/\btextureLod\s*\(/g, 'nmTexLod(')
+    if ((vbody + ' ' + fbody) !== beforeLod) {
+      preamble += '#define nmTexLod(s, uv, lod) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))),'
         + ' ivec2(0), textureSize((s),0)-ivec2(1)), 0))\n'
     }
   }

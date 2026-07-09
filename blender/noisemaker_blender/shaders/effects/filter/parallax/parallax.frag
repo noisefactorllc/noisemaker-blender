@@ -1,0 +1,58 @@
+#define nmTexLod(s, uv, lod) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))), ivec2(0), textureSize((s),0)-ivec2(1)), 0))
+#define nmTex(s, uv) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))), ivec2(0), textureSize((s),0)-ivec2(1)), 0))
+/*
+ * Pseudo-3D perspective shift driven by a height map
+ * Ray-marched parallax occlusion mapping with a configurable pivot height
+ */
+
+#define MARCH_STEPS 32
+const float SHIFT_SCALE = 0.15;
+
+// Convert RGB to luminosity
+float getLuminosity(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+float getHeight(vec2 uv) {
+    vec2 mapSize = vec2(textureSize(heightMap, 0));
+    vec2 localUV = (uv * fullResolution - tileOffset) / mapSize;
+    return getLuminosity(nmTexLod(heightMap, localUV, 0.0).rgb);
+}
+
+vec4 getInput(vec2 uv) {
+    vec2 texSize = vec2(textureSize(inputTex, 0));
+    vec2 localUV = (uv * fullResolution - tileOffset) / texSize;
+    return nmTexLod(inputTex, localUV, 0.0);
+}
+
+void main() {
+    vec2 globalCoord = gl_FragCoord.xy + tileOffset;
+    vec2 uv = globalCoord / fullResolution;
+
+    vec3 v = length(direction) > 0.0 ? normalize(direction) : vec3(0.0, 0.0, 1.0);
+    vec2 shift = v.xy * SHIFT_SCALE;
+
+    // View ray crosses this nm_fragment's UV at height == pivot
+    float t = 1.0;
+    vec2 rayUV = uv + shift * (1.0 - pivot);
+    float f = t - getHeight(rayUV);
+
+    if (f > 0.0) {
+        float stepSize = 1.0 / float(MARCH_STEPS);
+        for (int i = 1; i <= MARCH_STEPS; i++) {
+            float prevF = f;
+            vec2 prevUV = rayUV;
+            t = 1.0 - float(i) * stepSize;
+            rayUV = uv + shift * (t - pivot);
+            f = t - getHeight(rayUV);
+            if (f <= 0.0) {
+                // Refine: interpolate between the straddling samples
+                float w = f / (f - prevF);
+                rayUV = mix(rayUV, prevUV, w);
+                break;
+            }
+        }
+    }
+
+    fragColor = getInput(rayUV);
+}
