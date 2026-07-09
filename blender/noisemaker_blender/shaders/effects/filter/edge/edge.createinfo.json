@@ -43,6 +43,10 @@
     [
       "FLOAT",
       "mixAmt"
+    ],
+    [
+      "FLOAT",
+      "level"
     ]
   ],
   "samplers": [
