@@ -6,8 +6,17 @@
     "color"
   ],
   "paramAliases": {},
-  "uniformLayout": {},
-  "globals": {},
+  "globals": {
+    "mode": {
+      "type": "int",
+      "default": 0,
+      "uniform": "mode",
+      "choices": {
+        "full": 0,
+        "solarize": 1
+      }
+    }
+  },
   "passes": [
     {
       "name": "render",
