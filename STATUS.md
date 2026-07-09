@@ -1,20 +1,21 @@
 # noisemaker-blender — status & parity
 
 *Verified on Apple Silicon / Metal. The sources of truth are `parity/integration.sh`,
-`parity/compare.py`, and `parity/compiler/check_*.py`.*
+`parity/compare.py`, and `parity/compiler/check_*.py`. Synced against reference (noisemaker)
+commit **b7c1bc36** ("Add hatch filter").*
 
 This file holds the detailed coverage and parity numbers. For what the project is and how to use it,
 see the [README](README.md).
 
 ## Coverage
 
-**184 effect definitions** across 8 namespaces. **255 / 257 shader programs compile on Metal** — the
+**205 effect definitions** across 8 namespaces. **297 / 299 shader programs compile on Metal** — the
 whole catalog except the two audio synths `scope` / `spectrum` (audio input is out of scope).
 
 | Namespace | Definitions | State |
 |---|---|---|
 | `synth` | 29 | renders — generators, value/simplex/cell/curl noise, df64 fractals (byte-identical) |
-| `filter` | 90 | renders — color ops, convolutions, warps, multi-pass, feedback (byte-identical / ±1) |
+| `filter` | 111 | renders — color ops, convolutions, warps, multi-pass, feedback (byte-identical / ±1) |
 | `mixer` | 15 | renders (whole namespace) |
 | `classicNoisedeck` | 20 | renders — legacy generators |
 | `points` / `render` | 10 / 11 | renders — agents; deposit/billboards byte-identical, chaotic flows chaos-gated |
@@ -22,7 +23,7 @@ whole catalog except the two audio synths `scope` / `spectrum` (audio input is o
 
 ## Parity
 
-- **Shader compile (Metal):** 255 / 257 programs (`scope` / `spectrum` excluded — audio input).
+- **Shader compile (Metal):** 297 / 299 programs (`scope` / `spectrum` excluded — audio input).
 - **In-Blender DSL→graph compiler:** byte-identical to the reference across all gates
   (lex / parse / compile / expand / graph); the full 19-program blaster corpus compiles to
   byte-identical graphs. The addon needs **no external engine** to author or compile.

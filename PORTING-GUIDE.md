@@ -32,6 +32,9 @@ Transform rules:
    and delete the line. **Rewrite every 2-arg `texture(s, uv)` in the body to the `nmTex(s, uv)`
    macro** (a `texelFetch` with `clamp`, prepended as a `#define`) — this forces NEAREST + CLAMP,
    because the `gpu` module has no sampler filter/wrap state (it would default to LINEAR/REPEAT).
+   The explicit-LOD 3-arg `textureLod(s, uv, lod)` form (e.g. `filter/parallax`'s ray march) gets
+   the same treatment via a second macro, `nmTexLod(s, uv, lod)`, that ignores its `lod` arg (every
+   render target here is a single mip level, so the requested LOD is always a no-op).
    (3D volumes are 2D atlases sampled with `sampler2D`; there is no `sampler3D`/`FLOAT_3D`.)
 4. **Lift `out vec4 <name>;`** into `fragment_out(0,'VEC4',name)`. Keep the name; the body’s
    `name = ...` assignment is unchanged. **MRT**: multiple `out` → multiple `fragment_out` slots,
