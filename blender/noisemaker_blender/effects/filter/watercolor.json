@@ -1,0 +1,77 @@
+{
+  "name": "Watercolor",
+  "namespace": "filter",
+  "func": "watercolor",
+  "tags": [
+    "blur",
+    "edges"
+  ],
+  "paramAliases": {},
+  "globals": {
+    "detail": {
+      "type": "float",
+      "default": 50,
+      "uniform": "detail",
+      "min": 0,
+      "max": 100
+    },
+    "shadowIntensity": {
+      "type": "float",
+      "default": 40,
+      "uniform": "shadowIntensity",
+      "min": 0,
+      "max": 100
+    },
+    "paperTexture": {
+      "type": "float",
+      "default": 30,
+      "uniform": "paperTexture",
+      "min": 0,
+      "max": 100
+    }
+  },
+  "passes": [
+    {
+      "name": "seed",
+      "program": "wcSeed",
+      "inputs": {
+        "inputTex": "inputTex"
+      },
+      "outputs": {
+        "fragColor": "global_wc_state"
+      },
+      "uniforms": {}
+    },
+    {
+      "name": "wcSimplify",
+      "program": "wcSimplify",
+      "inputs": {
+        "inputTex": "global_wc_state"
+      },
+      "outputs": {
+        "fragColor": "global_wc_state"
+      },
+      "uniforms": {},
+      "repeat": 2
+    },
+    {
+      "name": "wcComposite",
+      "program": "wcComposite",
+      "inputs": {
+        "inputTex": "inputTex",
+        "simplifiedTex": "global_wc_state"
+      },
+      "outputs": {
+        "fragColor": "outputTex"
+      },
+      "uniforms": {}
+    }
+  ],
+  "textures": {
+    "global_wc_state": {
+      "width": "input",
+      "height": "input",
+      "format": "rgba16f"
+    }
+  }
+}
