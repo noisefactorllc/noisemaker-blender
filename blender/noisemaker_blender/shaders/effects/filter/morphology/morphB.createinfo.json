@@ -11,10 +11,6 @@
     [
       "FLOAT",
       "radius"
-    ],
-    [
-      "INT",
-      "shape"
     ]
   ],
   "samplers": [
@@ -32,7 +28,7 @@
     ]
   ],
   "uniformAliases": {},
-  "std140Bytes": 32,
+  "std140Bytes": 16,
   "ubo": false,
   "notes": []
 }

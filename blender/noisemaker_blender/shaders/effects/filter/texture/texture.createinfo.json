@@ -11,6 +11,26 @@
     [
       "FLOAT",
       "scale"
+    ],
+    [
+      "FLOAT",
+      "intensity"
+    ],
+    [
+      "FLOAT",
+      "contrast"
+    ],
+    [
+      "BOOL",
+      "mono"
+    ],
+    [
+      "VEC2",
+      "tileOffset"
+    ],
+    [
+      "VEC2",
+      "fullResolution"
     ]
   ],
   "samplers": [
@@ -28,7 +48,7 @@
     ]
   ],
   "uniformAliases": {},
-  "std140Bytes": 16,
+  "std140Bytes": 48,
   "ubo": false,
   "notes": []
 }

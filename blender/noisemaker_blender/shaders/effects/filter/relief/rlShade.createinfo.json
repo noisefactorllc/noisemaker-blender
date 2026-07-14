@@ -9,10 +9,6 @@
       "tileOffset"
     ],
     [
-      "INT",
-      "mode"
-    ],
-    [
       "FLOAT",
       "detail"
     ],
@@ -57,7 +53,7 @@
     ]
   ],
   "uniformAliases": {},
-  "std140Bytes": 80,
+  "std140Bytes": 64,
   "ubo": false,
   "notes": []
 }

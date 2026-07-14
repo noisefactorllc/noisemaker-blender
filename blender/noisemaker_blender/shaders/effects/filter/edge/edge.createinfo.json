@@ -1,14 +1,6 @@
 {
   "pushConstants": [
     [
-      "VEC2",
-      "tileOffset"
-    ],
-    [
-      "VEC2",
-      "fullResolution"
-    ],
-    [
       "FLOAT",
       "nm_kernel"
     ],
@@ -47,6 +39,10 @@
     [
       "FLOAT",
       "level"
+    ],
+    [
+      "FLOAT",
+      "contourSide"
     ]
   ],
   "samplers": [
@@ -66,7 +62,7 @@
   "uniformAliases": {
     "kernel": "nm_kernel"
   },
-  "std140Bytes": 64,
+  "std140Bytes": 48,
   "ubo": false,
   "notes": [
     "ALIASED kernel"

@@ -3,7 +3,8 @@
   "namespace": "filter",
   "func": "morphology",
   "tags": [
-    "blur"
+    "blur",
+    "artist"
   ],
   "paramAliases": {},
   "globals": {
@@ -26,7 +27,7 @@
     "shape": {
       "type": "int",
       "default": 0,
-      "uniform": "shape",
+      "define": "SHAPE",
       "choices": {
         "square": 0,
         "round": 1

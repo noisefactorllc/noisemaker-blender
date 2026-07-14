@@ -3,13 +3,14 @@
   "namespace": "filter",
   "func": "scatter",
   "tags": [
-    "noise"
+    "noise",
+    "artist"
   ],
   "paramAliases": {},
   "globals": {
     "radius": {
       "type": "float",
-      "default": 5,
+      "default": 12,
       "uniform": "radius",
       "min": 1,
       "max": 25
@@ -17,7 +18,7 @@
     "mode": {
       "type": "int",
       "default": 0,
-      "uniform": "mode",
+      "define": "MODE",
       "choices": {
         "normal": 0,
         "darkenOnly": 1,

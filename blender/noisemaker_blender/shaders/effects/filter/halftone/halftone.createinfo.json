@@ -13,20 +13,28 @@
       "fullResolution"
     ],
     [
-      "INT",
-      "mode"
-    ],
-    [
-      "INT",
-      "pattern"
-    ],
-    [
       "FLOAT",
       "frequency"
     ],
     [
       "FLOAT",
-      "angle"
+      "cyanAngle"
+    ],
+    [
+      "FLOAT",
+      "magentaAngle"
+    ],
+    [
+      "FLOAT",
+      "yellowAngle"
+    ],
+    [
+      "FLOAT",
+      "blackAngle"
+    ],
+    [
+      "FLOAT",
+      "monoAngle"
     ],
     [
       "FLOAT",
@@ -56,7 +64,7 @@
     ]
   ],
   "uniformAliases": {},
-  "std140Bytes": 80,
+  "std140Bytes": 96,
   "ubo": false,
   "notes": []
 }

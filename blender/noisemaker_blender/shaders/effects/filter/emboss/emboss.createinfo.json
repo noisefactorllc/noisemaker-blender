@@ -22,6 +22,10 @@
     ],
     [
       "FLOAT",
+      "colorAmount"
+    ],
+    [
+      "FLOAT",
       "renderScale"
     ]
   ],
@@ -40,7 +44,7 @@
     ]
   ],
   "uniformAliases": {},
-  "std140Bytes": 32,
+  "std140Bytes": 48,
   "ubo": false,
   "notes": []
 }

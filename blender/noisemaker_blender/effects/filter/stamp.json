@@ -4,7 +4,8 @@
   "func": "stamp",
   "tags": [
     "blur",
-    "edges"
+    "edges",
+    "artist"
   ],
   "paramAliases": {},
   "globals": {

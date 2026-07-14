@@ -9,10 +9,6 @@
       "tileOffset"
     ],
     [
-      "VEC2",
-      "fullResolution"
-    ],
-    [
       "FLOAT",
       "spacing"
     ],
@@ -44,7 +40,7 @@
     ]
   ],
   "uniformAliases": {},
-  "std140Bytes": 48,
+  "std140Bytes": 32,
   "ubo": false,
   "notes": []
 }

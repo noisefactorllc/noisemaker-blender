@@ -3,16 +3,17 @@
   "namespace": "filter",
   "func": "median",
   "tags": [
-    "blur"
+    "blur",
+    "artist"
   ],
   "paramAliases": {},
   "globals": {
-    "iterations": {
+    "radius": {
       "type": "int",
-      "default": 1,
-      "uniform": "iterations",
+      "default": 3,
+      "define": "RADIUS",
       "min": 1,
-      "max": 8
+      "max": 3
     },
     "threshold": {
       "type": "float",
@@ -24,34 +25,10 @@
   },
   "passes": [
     {
-      "name": "seed",
-      "program": "medianSeed",
+      "name": "median",
+      "program": "median",
       "inputs": {
         "inputTex": "inputTex"
-      },
-      "outputs": {
-        "fragColor": "global_median_state"
-      },
-      "uniforms": {}
-    },
-    {
-      "name": "medianPass",
-      "program": "medianPass",
-      "inputs": {
-        "inputTex": "global_median_state"
-      },
-      "outputs": {
-        "fragColor": "global_median_state"
-      },
-      "uniforms": {},
-      "repeat": "iterations"
-    },
-    {
-      "name": "final",
-      "program": "medianFinal",
-      "inputs": {
-        "inputTex": "inputTex",
-        "medTex": "global_median_state"
       },
       "outputs": {
         "fragColor": "outputTex"
@@ -59,11 +36,5 @@
       "uniforms": {}
     }
   ],
-  "textures": {
-    "global_median_state": {
-      "width": "input",
-      "height": "input",
-      "format": "rgba16f"
-    }
-  }
+  "textures": {}
 }

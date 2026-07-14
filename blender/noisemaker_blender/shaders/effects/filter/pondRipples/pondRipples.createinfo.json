@@ -21,14 +21,6 @@
       "ridges"
     ],
     [
-      "INT",
-      "style"
-    ],
-    [
-      "INT",
-      "wrap"
-    ],
-    [
       "BOOL",
       "antialias"
     ]

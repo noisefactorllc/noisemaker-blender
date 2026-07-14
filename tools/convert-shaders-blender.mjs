@@ -72,9 +72,18 @@ function renameReserved (src) {
 // can't size an array — `const Foo X[COUNT]` fails with "invalid use of non-static data member".
 // Promote column-0 integer consts to #define (true compile-time literals). Function-local consts
 // (indented) are untouched, so this can't collide with locals of the same name.
+// Also promotes a top-level `const int NAME = <arithmetic expr of other compile-time names/
+// literals>;` (e.g. dither's `const int FS_ERR_W = FS_BLOCK + FS_APRON_MAX + FS_RPAD + 1;`, used
+// to size a local array) the same way — Blender's GLSL->MSL codegen rejects ANY top-level `const
+// int` as an array size (treats it as a non-static data member), regardless of whether the RHS is
+// a bare literal or an expression of other already-#define'd compile-time names. The expansion is
+// parenthesized so precedence holds wherever the name is later used inside a larger expression.
+// Scoped to column-0 (top-level) decls only, same as the bare-literal case, so function-local
+// consts are never touched; the RHS charset excludes `;{}` so it can only capture one statement.
 function constIntToDefine (src) {
-  return src.replace(/^const[ \t]+int[ \t]+([A-Za-z_]\w*)[ \t]*=[ \t]*(-?\d+)[ \t]*;[ \t]*(?:\/\/.*)?$/gm,
-    '#define $1 $2')
+  return src.replace(
+    /^const[ \t]+int[ \t]+([A-Za-z_]\w*)[ \t]*=[ \t]*([A-Za-z_0-9 \t+\-*/()]+?)[ \t]*;[ \t]*(?:\/\/.*)?$/gm,
+    (m, name, expr) => /^-?\d+$/.test(expr.trim()) ? `#define ${name} ${expr.trim()}` : `#define ${name} (${expr.trim()})`)
 }
 
 // GLSL ES `vecN == vecN` yields a SCALAR bool (true iff ALL components equal). Blender's

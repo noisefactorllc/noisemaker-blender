@@ -1,10 +1,6 @@
 {
   "pushConstants": [
     [
-      "VEC2",
-      "resolution"
-    ],
-    [
       "FLOAT",
       "size"
     ]

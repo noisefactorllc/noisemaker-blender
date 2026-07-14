@@ -1,30 +1,35 @@
 #define nmTex(s, uv) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))), ivec2(0), textureSize((s),0)-ivec2(1)), 0))
 /*
- * Scatter - jitter pass (Photoshop Diffuse / Spatter / frosted glass).
+ * Scatter - jitter pass (Diffuse / Spatter / frosted glass).
  * Each pixel samples the input at a random offset within [-radius, radius]
  * px on each axis, drawn from a 2D hash seeded by the pixel's global
  * (tile-aware) coordinate. `mode` selects how the offset is derived and how
  * the sampled pixel combines with the source pixel:
  *   normal (0)      - raw random offset; sampled value used directly.
  *   darkenOnly (1)  - raw random offset; min(src, sampled) per channel
- *                     (Photoshop Diffuse Darken Only).
+ *                     (Diffuse Darken Only).
  *   lightenOnly (2) - raw random offset; max(src, sampled) per channel
- *                     (Photoshop Diffuse Lighten Only).
+ *                     (Diffuse Lighten Only).
  *   anisotropic (3) - the offset is projected onto the direction
  *                     perpendicular to the local luminance gradient, so the
  *                     scatter smears along edges/contours instead of
- *                     scattering isotropically (Photoshop Diffuse
+ *                     scattering isotropically (Diffuse
  *                     Anisotropic). Falls back to the raw offset where the
  *                     local gradient is ~zero (flat regions have no edge
  *                     direction to follow).
  *   clumped (4)     - the hash coordinate is quantized to 3px blocks before
  *                     hashing, so every pixel in a block shares the same
  *                     random offset, producing blocky clumps of shared
- *                     displacement instead of per-pixel grain (Photoshop
- *                     Spatter).
+ *                     displacement instead of per-pixel grain.
  * scatterSmooth (the second pass) re-blends this pass's output with a 3x3
  * tent blur by `smoothness`.
  */
+
+// MODE is a compile-time define injected by the runtime (see definition.js
+// `globals.mode.define`), so the compiler drops the dead mode arms below.
+#ifndef MODE
+#define MODE 0
+#endif
 
 vec2 hash22(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
@@ -55,21 +60,20 @@ void main() {
 
     // Seed with the global (tile-aware) coordinate, not gl_FragCoord.xy
     // alone, so the scatter field is continuous across CLI render tiles
-    // instead of restarting at each tile's local origin (see
-    // filter/spinBlur's tile-jitter fix, commit ff5e45f4).
+    // instead of restarting at each tile's local origin.
     vec2 globalCoord = gl_FragCoord.xy + tileOffset;
 
     // Clumped mode: quantize the hash coordinate to 3px blocks BEFORE
     // hashing so every pixel in a block shares the same random offset.
     vec2 hashCoord = globalCoord;
-    if (mode == 4) {
+    #if MODE == 4
         hashCoord = floor(globalCoord / 3.0) * 3.0;
-    }
+    #endif
 
     vec2 rnd = hash22(hashCoord + float(seed) * 101.7) - 0.5;
     vec2 offset = rnd * 2.0 * radius;
 
-    if (mode == 3) {
+    #if MODE == 3
         // Anisotropic: project the offset onto the direction perpendicular
         // to the local luminance gradient (edge-following smear).
         vec2 grad = lumGradient(uv);
@@ -79,7 +83,7 @@ void main() {
             offset = dot(offset, perp) * perp;
         }
         // else: gradient ~zero (flat region) -- fall back to raw offset.
-    }
+    #endif
 
     vec2 sampleUV = clamp((gl_FragCoord.xy + offset) / resolution, 0.0, 1.0);
 
@@ -87,11 +91,11 @@ void main() {
     vec4 samp = nmTex(inputTex, sampleUV);
 
     vec4 result = samp;
-    if (mode == 1) {
+    #if MODE == 1
         result = min(src, samp);
-    } else if (mode == 2) {
+    #elif MODE == 2
         result = max(src, samp);
-    }
+    #endif
 
     fragColor = result;
 }

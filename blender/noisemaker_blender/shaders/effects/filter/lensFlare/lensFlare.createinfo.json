@@ -25,10 +25,6 @@
       "centerY"
     ],
     [
-      "INT",
-      "lensType"
-    ],
-    [
       "VEC3",
       "tint"
     ]

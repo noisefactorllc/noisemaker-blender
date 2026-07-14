@@ -1,14 +1,6 @@
 {
   "pushConstants": [
     [
-      "VEC2",
-      "tileOffset"
-    ],
-    [
-      "VEC2",
-      "fullResolution"
-    ],
-    [
       "INT",
       "mode"
     ]
@@ -28,7 +20,7 @@
     ]
   ],
   "uniformAliases": {},
-  "std140Bytes": 32,
+  "std140Bytes": 16,
   "ubo": false,
   "notes": []
 }

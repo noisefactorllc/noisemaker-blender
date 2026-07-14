@@ -9,14 +9,6 @@
       "tileOffset"
     ],
     [
-      "VEC2",
-      "fullResolution"
-    ],
-    [
-      "INT",
-      "mode"
-    ],
-    [
       "FLOAT",
       "tileSize"
     ],

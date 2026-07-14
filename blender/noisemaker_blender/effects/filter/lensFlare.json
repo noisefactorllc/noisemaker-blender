@@ -3,7 +3,8 @@
   "namespace": "filter",
   "func": "lensFlare",
   "tags": [
-    "lens"
+    "lens",
+    "artist"
   ],
   "paramAliases": {},
   "globals": {
@@ -31,7 +32,7 @@
     "lensType": {
       "type": "int",
       "default": 0,
-      "uniform": "lensType",
+      "define": "LENS_TYPE",
       "choices": {
         "zoom50_300": 0,
         "prime35": 1,

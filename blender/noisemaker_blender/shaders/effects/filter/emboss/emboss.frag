@@ -1,40 +1,59 @@
 #define nmTex(s, uv) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))), ivec2(0), textureSize((s),0)-ivec2(1)), 0))
 /*
- * Emboss convolution effect
- * Creates a raised relief appearance
- *
- * angle/height rotate and scale the nm_kernel's fixed 3x3 sampling geometry
- * about its own built-in axis instead of replacing it outright: this nm_kernel
- * has no neutral (0.5) bias term (its weights sum to 1, so flat regions pass
- * through as the original color, not mid-gray), so a literal Photoshop-style
- * "0.5 + directional diff" formula cannot reproduce this shader's pre-existing
- * output and was rejected on that basis (see help.md).
- *
- * At angle=135, height=1 the rotation is identity and the scale is 1x, so
- * every nm_sample offset below equals the original hard-coded +/-texelSize grid
- * exactly (byte-identical old-defaults output, for any amount).
+ * Emboss relief with two explicit visual contracts:
+ *   0 color       - the shipped color convolution, preserved exactly
+ *   1 gray  - neutral-gray directional relief with edge-local chroma
  */
 
-void main() {
-    vec2 globalCoord = gl_FragCoord.xy + tileOffset;
-    ivec2 texSize = textureSize(inputTex, 0);
-    vec2 resolution = vec2(texSize);
-    vec2 uv = globalCoord / fullResolution;
-    vec2 texelSize = 1.0 / resolution;
+// STYLE is a compile-time define injected by the runtime (definition.js
+// globals.style.define). Baking it lets the compiler drop the unused color or
+// gray path entirely instead of carrying both through a runtime branch.
+#ifndef STYLE
+#define STYLE 0
+#endif
 
-    vec4 origColor = nmTex(inputTex, gl_FragCoord.xy / vec2(textureSize(inputTex, 0)));
+const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
-    // Emboss nm_kernel
-    // -2 -1  0
-    // -1  1  1
-    //  0  1  2
+vec3 sampleGlobal(vec2 globalUV) {
+    vec2 localUV = (globalUV * fullResolution - tileOffset) / vec2(textureSize(inputTex, 0));
+    return nmTex(inputTex, localUV).rgb;
+}
+
+vec3 colorDefaultEmboss(vec2 uv, vec2 texelSize) {
     float nm_kernel[9];
     nm_kernel[0] = -2.0; nm_kernel[1] = -1.0; nm_kernel[2] = 0.0;
     nm_kernel[3] = -1.0; nm_kernel[4] = 1.0;  nm_kernel[5] = 1.0;
     nm_kernel[6] = 0.0;  nm_kernel[7] = 1.0;  nm_kernel[8] = 2.0;
 
-    // Base nm_kernel tap positions, 1px units. angle/height rotate+scale this
-    // fixed geometry about its own built-in axis (see header above).
+    // COLOR_DEFAULT_EXACT_BEGIN
+    // Copied from the pre-angle/height shader: literal offsets and arithmetic
+    // order intentionally stay intact so defaults never depend on trig folding.
+    vec2 offsets[9];
+    offsets[0] = vec2(-texelSize.x, -texelSize.y);
+    offsets[1] = vec2(0.0, -texelSize.y);
+    offsets[2] = vec2(texelSize.x, -texelSize.y);
+    offsets[3] = vec2(-texelSize.x, 0.0);
+    offsets[4] = vec2(0.0, 0.0);
+    offsets[5] = vec2(texelSize.x, 0.0);
+    offsets[6] = vec2(-texelSize.x, texelSize.y);
+    offsets[7] = vec2(0.0, texelSize.y);
+    offsets[8] = vec2(texelSize.x, texelSize.y);
+
+    vec3 conv = vec3(0.0);
+    for (int i = 0; i < 9; i++) {
+        vec3 texSample = nmTex(inputTex, ((uv + offsets[i] * amount * renderScale) * fullResolution - tileOffset) / vec2(textureSize(inputTex, 0))).rgb;
+        conv += texSample * nm_kernel[i];
+    }
+    // COLOR_DEFAULT_EXACT_END
+    return conv;
+}
+
+vec3 colorGeneralEmboss(vec2 uv, vec2 texelSize) {
+    float nm_kernel[9];
+    nm_kernel[0] = -2.0; nm_kernel[1] = -1.0; nm_kernel[2] = 0.0;
+    nm_kernel[3] = -1.0; nm_kernel[4] = 1.0;  nm_kernel[5] = 1.0;
+    nm_kernel[6] = 0.0;  nm_kernel[7] = 1.0;  nm_kernel[8] = 2.0;
+
     vec2 baseOffsetsPx[9];
     baseOffsetsPx[0] = vec2(-1.0, -1.0);
     baseOffsetsPx[1] = vec2( 0.0, -1.0);
@@ -46,23 +65,60 @@ void main() {
     baseOffsetsPx[7] = vec2( 0.0,  1.0);
     baseOffsetsPx[8] = vec2( 1.0,  1.0);
 
-    // Reference angle 135 is the pre-existing nm_kernel's own implicit
-    // direction, so theta=0 (identity rotation) lands exactly there.
     float theta = radians(angle - 135.0);
     float ct = cos(theta);
     float st = sin(theta);
-
     vec3 conv = vec3(0.0);
-
     for (int i = 0; i < 9; i++) {
         vec2 basePx = baseOffsetsPx[i];
-        // R(-theta) rotation, matching the spinBlur/pinch handedness convention;
-        // the theta=0 identity point is unaffected by handedness.
         vec2 rotatedPx = vec2(ct * basePx.x + st * basePx.y, -st * basePx.x + ct * basePx.y) * height;
         vec2 offsetUV = rotatedPx * texelSize * amount * renderScale;
         vec3 texSample = nmTex(inputTex, ((uv + offsetUV) * fullResolution - tileOffset) / vec2(textureSize(inputTex, 0))).rgb;
         conv += texSample * nm_kernel[i];
     }
+    return conv;
+}
 
-    fragColor = vec4(clamp(conv, 0.0, 1.0), origColor.a);
+vec3 grayEmboss(vec2 uv, vec3 centerRGB) {
+    float theta = radians(angle);
+    // This direction is a backend-independent nm_sample delta, so GLSL and WGSL
+    // use the same nm_constant-vector expansion.
+    vec2 direction = vec2(cos(theta), sin(theta));
+    vec2 offsetUV = direction * (height * renderScale) / fullResolution;
+    float positiveLuma = dot(sampleGlobal(uv + offsetUV), LUMA);
+    float negativeLuma = dot(sampleGlobal(uv - offsetUV), LUMA);
+    float signedEdge = positiveLuma - negativeLuma;
+    float edgeMagnitude = abs(signedEdge);
+    float relief = 0.5 + 0.5 * signedEdge;
+
+    float centerLuma = dot(centerRGB, LUMA);
+    vec3 sourceChroma = centerRGB - vec3(centerLuma);
+    vec3 tracedColor = sourceChroma * edgeMagnitude * clamp(colorAmount / 100.0, 0.0, 1.0);
+    return vec3(relief) + tracedColor;
+}
+
+void main() {
+    vec2 globalCoord = gl_FragCoord.xy + tileOffset;
+    vec2 resolution = vec2(textureSize(inputTex, 0));
+    vec2 uv = globalCoord / fullResolution;
+    vec2 texelSize = 1.0 / resolution;
+    vec4 origColor = nmTex(inputTex, gl_FragCoord.xy / resolution);
+    bool fullFrame = all(equal(tileOffset, vec2(0.0))) && all(equal(fullResolution, resolution));
+    // Preserve the shipped full-frame nm_sample delta exactly. A tiled input's
+    // local texture is smaller than the print canvas, so only that path uses
+    // the full-resolution pixel delta before mapping back to local UVs.
+    vec2 colorTexelSize = fullFrame ? texelSize : 1.0 / fullResolution;
+
+    vec3 result;
+#if STYLE == 0
+    if (angle == 135.0 && height == 1.0) {
+        result = colorDefaultEmboss(uv, colorTexelSize);
+    } else {
+        result = colorGeneralEmboss(uv, colorTexelSize);
+    }
+#else
+    result = grayEmboss(uv, origColor.rgb);
+#endif
+
+    fragColor = vec4(clamp(result, 0.0, 1.0), origColor.a);
 }

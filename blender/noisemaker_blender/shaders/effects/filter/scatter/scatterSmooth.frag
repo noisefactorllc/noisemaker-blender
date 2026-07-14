@@ -1,7 +1,7 @@
 #define nmTex(s, uv) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))), ivec2(0), textureSize((s),0)-ivec2(1)), 0))
 /*
  * Scatter - smooth pass: re-blends the jittered result from scatterJitter
- * with a 3x3 tent blur, mixed in by smoothness/100 (Photoshop Spatter's
+ * with a 3x3 tent blur, mixed in by smoothness/100 (Spatter's
  * Smoothness parameter). smoothness = 0 leaves the pure per-pixel jitter
  * untouched; higher values soften the granular scatter into smoother
  * frosted streaks.

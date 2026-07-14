@@ -4,7 +4,8 @@
   "func": "photocopy",
   "tags": [
     "blur",
-    "edges"
+    "edges",
+    "artist"
   ],
   "paramAliases": {},
   "globals": {
@@ -17,7 +18,7 @@
     },
     "darkness": {
       "type": "float",
-      "default": 50,
+      "default": 75,
       "uniform": "darkness",
       "min": 0,
       "max": 100

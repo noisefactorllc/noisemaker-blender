@@ -1,7 +1,7 @@
 #define nmTex(s, uv) (texelFetch((s), clamp(ivec2(floor((uv)*vec2(textureSize((s),0)))), ivec2(0), textureSize((s),0)-ivec2(1)), 0))
 /*
- * Directional Blur - linear motion blur along a fixed angle (Photoshop
- * Motion Blur). Averages a fixed N-tap comb stepped along
+ * Directional Blur - linear motion blur along a fixed angle. Averages a
+ * fixed N-tap comb stepped along
  * dir = (cos(angle), sin(angle)), spanning blurDistance px total
  * (t ranges over [-blurDistance/2, blurDistance/2]). A per-pixel hash
  * shifts the whole tap comb by up to half a tap-step to hide banding

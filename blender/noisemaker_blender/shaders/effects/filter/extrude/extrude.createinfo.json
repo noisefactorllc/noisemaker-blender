@@ -13,20 +13,12 @@
       "fullResolution"
     ],
     [
-      "INT",
-      "extrudeType"
-    ],
-    [
       "FLOAT",
       "size"
     ],
     [
       "FLOAT",
       "depth"
-    ],
-    [
-      "INT",
-      "depthSource"
     ],
     [
       "BOOL",

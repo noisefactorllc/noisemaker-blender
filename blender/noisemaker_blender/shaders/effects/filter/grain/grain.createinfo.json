@@ -27,18 +27,6 @@
     [
       "FLOAT",
       "pause"
-    ],
-    [
-      "FLOAT",
-      "intensity"
-    ],
-    [
-      "FLOAT",
-      "contrast"
-    ],
-    [
-      "FLOAT",
-      "mono"
     ]
   ],
   "samplers": [
@@ -56,7 +44,7 @@
     ]
   ],
   "uniformAliases": {},
-  "std140Bytes": 64,
+  "std140Bytes": 48,
   "ubo": false,
   "notes": []
 }

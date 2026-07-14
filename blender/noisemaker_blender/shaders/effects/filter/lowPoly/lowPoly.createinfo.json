@@ -39,14 +39,6 @@
     [
       "FLOAT",
       "alpha"
-    ],
-    [
-      "FLOAT",
-      "borderWidth"
-    ],
-    [
-      "FLOAT",
-      "lightIntensity"
     ]
   ],
   "samplers": [

@@ -310,6 +310,56 @@ def fix_scalar_reflect_refract(src):
     return out[:nl + 1] + _REFLECT_HELPERS + out[nl + 1:] if nl >= 0 else _REFLECT_HELPERS + out
 
 
+# packHalf2x16/unpackHalf2x16 polyfill. Blender's GLSL->MSL codegen has no builtin under either
+# name ("undeclared identifier") — unlike reflect/refract there's no Metal-side ambiguity to dodge,
+# so we inject real functions under the EXACT reference names (no call-site rewriting needed).
+# Built on floatBitsToUint/uintBitsToFloat + uint bitwise ops, both already proven to compile
+# elsewhere in the catalog (e.g. every pcg() hash). Round-to-nearest (ties round up rather than
+# ties-to-even — the GLSL spec doesn't mandate a tie rule, and median.glsl only uses the pack/
+# unpack pair as an internal sort/reconstruction key, so any consistent rounding is equivalent).
+# Values below half's normal range (|v| < 2^-14 — far darker than any perceptible color channel)
+# flush to signed zero on pack instead of encoding a true subnormal; unpack is bit-exact for every
+# value pack can produce (including its zero-flush), so the pair round-trips consistently for the
+# color-channel range this shader actually sees.
+_PACK_HALF_HELPERS = (
+    "\nfloat nm_half2float(uint h){\n"
+    "  uint sign = (h & 0x8000u) << 16u;\n"
+    "  uint ex = (h >> 10u) & 0x1fu;\n"
+    "  uint mant = h & 0x3ffu;\n"
+    "  if (ex == 0u) { return uintBitsToFloat(sign); }\n"
+    "  if (ex == 31u) { return uintBitsToFloat(sign | 0x7f800000u | (mant << 13u)); }\n"
+    "  return uintBitsToFloat(sign | (((ex - 15u) + 127u) << 23u) | (mant << 13u));\n"
+    "}\n"
+    "uint nm_float2half(float f){\n"
+    "  uint x = floatBitsToUint(f);\n"
+    "  uint sign = (x >> 16u) & 0x8000u;\n"
+    "  uint ax = x & 0x7fffffffu;\n"
+    "  if (ax == 0u) { return sign; }\n"
+    "  int e = int(ax >> 23u) - 127;\n"
+    "  if (e <= -15) { return sign; }\n"
+    "  if (e >= 16) { return sign | 0x7c00u; }\n"
+    "  uint m = ax & 0x7fffffu;\n"
+    "  uint rm = (m + 0x1000u) >> 13u;\n"
+    "  uint he = uint(e + 15);\n"
+    "  if (rm >= 0x400u) { rm = 0u; he += 1u; }\n"
+    "  if (he >= 31u) { return sign | 0x7c00u; }\n"
+    "  return sign | (he << 10u) | rm;\n"
+    "}\n"
+    "uint packHalf2x16(vec2 v){ return (nm_float2half(v.y) << 16u) | nm_float2half(v.x); }\n"
+    "vec2 unpackHalf2x16(uint u){ return vec2(nm_half2float(u & 0xffffu), nm_half2float(u >> 16u)); }\n"
+)
+_PACK_HALF_RE = __import__("re").compile(r"\b(?:pack|unpack)Half2x16\b")
+
+
+def inject_pack_half2x16(src):
+    """Prepend the packHalf2x16/unpackHalf2x16 polyfill when the body calls either (median's
+    packed-record sort key). No-op otherwise. See _PACK_HALF_HELPERS."""
+    if not _PACK_HALF_RE.search(src):
+        return src
+    nl = src.find("\n")                                        # keep any leading directive first
+    return src[:nl + 1] + _PACK_HALF_HELPERS + src[nl + 1:] if nl >= 0 else _PACK_HALF_HELPERS + src
+
+
 def rename_cpp_alt_tokens(src):
     """Rename identifiers that are C++ alternative tokens (`or`/`and`/`xor`/...) to `nm_<name>`
     — they're keywords in Metal's C++ compiler. Tokenized so comments and member accesses are

@@ -9,14 +9,6 @@
       "tileOffset"
     ],
     [
-      "VEC2",
-      "fullResolution"
-    ],
-    [
-      "INT",
-      "mode"
-    ],
-    [
       "FLOAT",
       "cellSize"
     ],
@@ -52,7 +44,7 @@
     ]
   ],
   "uniformAliases": {},
-  "std140Bytes": 64,
+  "std140Bytes": 48,
   "ubo": false,
   "notes": []
 }

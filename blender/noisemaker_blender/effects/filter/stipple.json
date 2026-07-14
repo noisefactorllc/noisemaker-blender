@@ -4,14 +4,15 @@
   "func": "stipple",
   "tags": [
     "pixel",
-    "noise"
+    "noise",
+    "artist"
   ],
   "paramAliases": {},
   "globals": {
     "mode": {
       "type": "int",
       "default": 0,
-      "uniform": "mode",
+      "define": "MODE",
       "choices": {
         "pointillize": 0,
         "mezzoDots": 1,

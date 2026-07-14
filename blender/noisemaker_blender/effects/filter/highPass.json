@@ -3,7 +3,8 @@
   "namespace": "filter",
   "func": "highPass",
   "tags": [
-    "edges"
+    "edges",
+    "artist"
   ],
   "paramAliases": {},
   "globals": {

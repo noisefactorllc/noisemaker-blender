@@ -51,6 +51,7 @@ def _body(src, is_ubo, descriptor):
         calling a builtin once a same-named local is in scope;
       - vecN==vecN(...) -> all(equal(...)) in bool contexts (compound case the transpiler misses);
       - scalar reflect/refract -> injected nm_reflect/nm_refract (Metal has no scalar overload);
+      - packHalf2x16/unpackHalf2x16 -> injected polyfill (no MSL-codegen builtin under either name);
       - for UBO effects, qualify bare uniform refs into the std140 block (scope-aware);
       - for an explicit `layout(std140)` block (remap), qualify its member refs -> <instance>.<member>.
     See backend/std140.py + docs/BLENDER-PLATFORM-NOTES.md."""
@@ -62,6 +63,7 @@ def _body(src, is_ubo, descriptor):
     src = std140.fix_vec_bool_compare(src)
     src = std140.fix_mat2_vector_ctor(src)
     src = std140.fix_scalar_reflect_refract(src)
+    src = std140.inject_pack_half2x16(src)
     if is_ubo:
         src = std140.rewrite_uniform_refs(src, descriptor.get("pushConstants", []))
     blk = descriptor.get("uniformBlock")

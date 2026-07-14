@@ -3,7 +3,8 @@
   "namespace": "filter",
   "func": "spinBlur",
   "tags": [
-    "blur"
+    "blur",
+    "artist"
   ],
   "paramAliases": {},
   "globals": {

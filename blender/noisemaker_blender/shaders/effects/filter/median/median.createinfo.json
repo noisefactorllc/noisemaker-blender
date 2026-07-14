@@ -1,8 +1,8 @@
 {
   "pushConstants": [
     [
-      "VEC2",
-      "resolution"
+      "FLOAT",
+      "threshold"
     ]
   ],
   "samplers": [
